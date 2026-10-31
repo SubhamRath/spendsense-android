@@ -67,6 +67,7 @@ object TransactionParser {
         val merchant = extractMerchant(body)
         val reference = extractReference(body)
         val category = categorize(body, merchant, type)
+        val balance = extractAvailableBalance(body)
 
         val senderScore = senderScore(sender)
         val transactionScore = listOf(
@@ -78,7 +79,7 @@ object TransactionParser {
         ).count { it }
 
         val confidence = (senderScore + transactionScore * 10).coerceIn(0, 100)
-        val dedupeKey = buildDedupeKey(sender, amount, type, merchant, reference, timestamp)
+        val dedupeKey = buildDedupeKey(sender, amount, type, merchant, reference, timestamp, balance, body)
 
         return Transaction(
             id = id,
@@ -98,6 +99,17 @@ object TransactionParser {
     private fun extractAmount(body: String): Double? {
         amountPatterns.forEach { pattern ->
             pattern.find(body)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()?.let { return it }
+        }
+        return null
+    }
+
+    private fun extractAvailableBalance(body: String): Double? {
+        val patterns = listOf(
+            Regex("""(?:Avl\s*Bal|Available\s+balance|New\s+Bal|New\s+balance)\s*[:\-]?\s*(?:INR|Rs\.?|₹)\s*([0-9,]+(?:\.\d{1,2})?)""", RegexOption.IGNORE_CASE),
+            Regex("""(?:Avl\s*Bal|Available\s+balance|New\s+Bal|New\s+balance)\s*[:\-]?\s*([0-9,]+(?:\.\d{1,2})?)""", RegexOption.IGNORE_CASE)
+        )
+        patterns.forEach { pattern ->
+            pattern.find(body)?.groupValues?.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()?.let { return it }
         }
         return null
     }
@@ -166,16 +178,22 @@ object TransactionParser {
         type: TransactionType,
         merchant: String,
         reference: String?,
-        timestamp: Long
+        timestamp: Long,
+        balance: Double?,
+        body: String
     ): String {
         if (!reference.isNullOrBlank()) {
             return "ref:" + reference.uppercase(Locale.ROOT).trim()
         }
 
         val normalizedMerchant = merchant.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
-        val timeBucket = timestamp / 120000L
+        val normalizedBody = body.lowercase(Locale.ROOT)
+            .replace(Regex("""https?://\S+"""), "")
+            .replace(Regex("""\s+"""), " ")
+            .trim()
+        val balancePart = balance?.let { "%.2f".format(Locale.US, it) } ?: "nobal"
         return "fp:" + type.name + ":" + "%.2f".format(Locale.US, amount) + ":" +
-            normalizedMerchant + ":" + timeBucket
+            normalizedMerchant + ":" + balancePart + ":" + normalizedBody
     }
 
     private fun categorize(body: String, merchant: String, type: TransactionType): String {
