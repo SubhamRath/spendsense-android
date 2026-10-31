@@ -110,7 +110,7 @@ private fun Dashboard(
     val transfers = filtered.filter { it.type == TransactionType.DEBIT && it.category == "Transfers" }.sumOf { it.amount }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
 
-    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp)) {
+    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column {
                 Text("SpendSense", style = MaterialTheme.typography.headlineMedium)
