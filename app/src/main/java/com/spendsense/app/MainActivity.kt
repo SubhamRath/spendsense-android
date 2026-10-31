@@ -13,6 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import java.util.Calendar
 import androidx.core.content.ContextCompat
 import com.spendsense.app.data.Transaction
 import com.spendsense.app.data.TransactionType
@@ -24,6 +28,8 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
 import java.util.Locale
+
+private enum class Period(val label: String) { TODAY("Today"), WEEK("Week"), MONTH("Month"), YEAR("Year"), ALL("All time") }
 
 class MainActivity : ComponentActivity() {
     private val repository by lazy { TransactionRepository.get(this) }
@@ -45,8 +51,8 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
-                Surface(Modifier.fillMaxSize()) {
+            SpendSenseTheme {
+                Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     Dashboard(
                         transactions = transactions,
                         categories = categories.map { it.name },
@@ -97,34 +103,66 @@ private fun Dashboard(
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onAddCategory: (String) -> Unit
 ) {
-    val income = transactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
-    val expenses = transactions.filter { it.type == TransactionType.DEBIT }.sumOf { it.amount }
+    var selectedPeriod by remember { mutableStateOf(Period.MONTH) }
+    val filtered = remember(transactions, selectedPeriod) { transactions.filterBy(selectedPeriod) }
+    val income = filtered.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
+    val expenses = filtered.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
+    val transfers = filtered.filter { it.type == TransactionType.DEBIT && it.category == "Transfers" }.sumOf { it.amount }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
 
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("SpendSense", style = MaterialTheme.typography.headlineMedium)
-        Text("SMS transaction scanner", style = MaterialTheme.typography.bodyMedium)
-        Button(onClick = onScan, Modifier.fillMaxWidth()) { Text("Scan transaction SMS") }
-
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            SummaryCard("Income", currency.format(income), Modifier.weight(1f))
-            SummaryCard("Expenses", currency.format(expenses), Modifier.weight(1f))
+    Column(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 14.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text("SpendSense", style = MaterialTheme.typography.headlineMedium)
+                Text("Your money at a glance", style = MaterialTheme.typography.bodyMedium)
+            }
+            TextButton(onClick = onScan) { Text("Scan SMS") }
         }
-        SummaryCard("Net cash flow", currency.format(income - expenses), Modifier.fillMaxWidth())
-        Text("Detected transactions (" + transactions.size + ")", style = MaterialTheme.typography.titleLarge)
-
-        if (transactions.isEmpty()) {
-            Text("No transactions scanned yet. Tap the button above and grant SMS access.")
-        } else {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(transactions.take(100), key = { it.id }) { TransactionRow(it, currency, categories, onChangeCategory, onAddCategory) }
+        Spacer(Modifier.height(14.dp))
+        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Period.values().forEach { period ->
+                FilterChip(selected = selectedPeriod == period, onClick = { selectedPeriod = period }, label = { Text(period.label) })
             }
         }
+        Spacer(Modifier.height(16.dp))
+        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            item {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MetricCard("Earned", currency.format(income), Modifier.weight(1f))
+                    MetricCard("Spent", currency.format(expenses), Modifier.weight(1f))
+                }
+            }
+            item { MetricCard("Net cash flow", currency.format(income - expenses), Modifier.fillMaxWidth()) }
+            item {
+                Text("Spending by category", style = MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(6.dp))
+                val breakdown = filtered.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }
+                    .groupBy { it.category }.mapValues { (_, items) -> items.sumOf { it.amount } }
+                    .toList().sortedByDescending { it.second }.take(6)
+                if (breakdown.isEmpty()) Text("No spending recorded for this period.")
+                else breakdown.forEach { (category, amount) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(category)
+                        Text(currency.format(amount))
+                    }
+                }
+                if (transfers > 0) Text("Transfers excluded from spending: " + currency.format(transfers), style = MaterialTheme.typography.bodySmall)
+            }
+            item { Text("Transactions (" + filtered.size + ")", style = MaterialTheme.typography.titleLarge) }
+            if (filtered.isEmpty()) item { Text("No transactions in this period.") }
+            else items(filtered.take(100), key = { it.id }) { TransactionRow(it, currency, categories, onChangeCategory, onAddCategory) }
+        }
+    }
     }
 }
 
 @Composable
-private fun SummaryCard(title: String, value: String, modifier: Modifier) {
+private fun SpendSenseTheme(content: @Composable () -> Unit) {
+    MaterialTheme(colorScheme = darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8AB4F8), background = androidx.compose.ui.graphics.Color(0xFF0B0F14), surface = androidx.compose.ui.graphics.Color(0xFF151A21), surfaceVariant = androidx.compose.ui.graphics.Color(0xFF20262E)), content = content)
+}
+
+@Composable
+private fun MetricCard(title: String, value: String, modifier: Modifier) {
     Card(modifier) {
         Column(Modifier.padding(16.dp)) {
             Text(title, style = MaterialTheme.typography.labelLarge)
@@ -228,4 +266,21 @@ private fun TransactionRow(
             }
         }
     }
+}
+
+private fun List<Transaction>.filterBy(period: Period): List<Transaction> {
+    if (period == Period.ALL) return this
+    val now = Calendar.getInstance()
+    val start = Calendar.getInstance().apply {
+        timeInMillis = now.timeInMillis
+        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        when (period) {
+            Period.TODAY -> Unit
+            Period.WEEK -> set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            Period.MONTH -> set(Calendar.DAY_OF_MONTH, 1)
+            Period.YEAR -> set(Calendar.DAY_OF_YEAR, 1)
+            Period.ALL -> Unit
+        }
+    }
+    return filter { it.timestamp >= start.timeInMillis }
 }
