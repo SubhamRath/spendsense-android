@@ -10,5 +10,8 @@ data class Transaction(
     val category: String,
     val sender: String,
     val timestamp: Long,
-    val rawMessage: String
+    val rawMessage: String,
+    val transactionRef: String? = null,
+    val dedupeKey: String = "sms:$id",
+    val confidence: Int = 0
 )
