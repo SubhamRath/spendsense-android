@@ -153,7 +153,6 @@ private fun Dashboard(
             else items(filtered.take(100), key = { it.id }) { TransactionRow(it, currency, categories, onChangeCategory, onAddCategory) }
         }
     }
-    }
 }
 
 @Composable
