@@ -54,6 +54,44 @@ class TransactionParserIdfcTest {
     }
 
     @Test
+    fun ignoresOtpMessageEvenWhenItContainsAnAmount() {
+        val sms = "Your OTP is 482913 for a transaction of Rs. 3,599.00. Do not share this OTP. IDFC FIRST Bank"
+        assertNull(TransactionParser.parse(7L, sender, 0L, sms))
+    }
+
+    @Test
+    fun ignoresFailedPayment() {
+        val sms = "Payment failed for Rs. 1,000.00 on your account. Transaction failed. IDFC FIRST Bank"
+        assertNull(TransactionParser.parse(8L, sender, 0L, sms))
+    }
+
+    @Test
+    fun ignoresDeclinedPayment() {
+        val sms = "Transaction declined for Rs. 2,500.00. Please try again. IDFC FIRST Bank"
+        assertNull(TransactionParser.parse(9L, sender, 0L, sms))
+    }
+
+    @Test
+    fun ignoresCreditCardBillNotice() {
+        val sms = "Your credit card bill of Rs. 12,000.00 is due on 10/11/2026. Total amount due. IDFC FIRST Bank"
+        assertNull(TransactionParser.parse(10L, sender, 0L, sms))
+    }
+
+    @Test
+    fun ignoresPromotionalSms() {
+        val sms = "Congratulations! Get cashback offer of Rs. 500.00 on your next payment. IDFC FIRST Bank"
+        assertNull(TransactionParser.parse(11L, sender, 0L, sms))
+    }
+
+    @Test
+    fun parsesReversalAsCreditRefund() {
+        val sms = "Rs. 1,000.00 has been reversed and credited to your account. IDFC FIRST Bank"
+        val tx = TransactionParser.parse(12L, sender, 0L, sms)
+        assertEquals(TransactionType.CREDIT, tx?.type)
+        assertEquals("Refund", tx?.category)
+    }
+
+    @Test
     fun ignoresFutureMandateNotice() {
         val sms = "Your account will be debited with Rs 7,872.00 towards CRED CCBP for the MerchantMandate on 02/09/2026. Pause mandate to stop execution. IDFC FIRST Bank"
         assertNull(TransactionParser.parse(5L, sender, 0L, sms))
