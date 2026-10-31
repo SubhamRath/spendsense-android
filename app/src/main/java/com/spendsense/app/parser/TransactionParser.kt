@@ -37,11 +37,14 @@ object TransactionParser {
     private val referencePatterns = listOf(
         Regex("""(?:UPI\s*(?:REF(?:ERENCE)?|TXN|TRANSACTION)?\s*(?:NO|NUMBER|ID)?|UPI\s*ID)\s*[:#-]?\s*([A-Za-z0-9./_-]{6,40})""", RegexOption.IGNORE_CASE),
         Regex("""(?:UTR|RRN|IMPS\s*(?:REF(?:ERENCE)?|NO|NUMBER)|NEFT\s*(?:REF(?:ERENCE)?|NO|NUMBER)|RTGS\s*(?:REF(?:ERENCE)?|NO|NUMBER))\s*[:#-]?\s*([A-Za-z0-9./_-]{6,40})""", RegexOption.IGNORE_CASE),
-        Regex("""(?:TXN|TRANSACTION|REF(?:ERENCE)?|BANK\s*REF(?:ERENCE)?)\s*(?:NO|NUMBER|ID)?\s*[:#-]?\s*([A-Za-z0-9./_-]{6,40})""", RegexOption.IGNORE_CASE)
+        Regex("""(?:TXN|TRANSACTION|REF(?:ERENCE)?|BANK\s*REF(?:ERENCE)?)\s*(?:NO|NUMBER|ID)?\s*[:#-]?\s*([A-Za-z0-9./_-]{6,40})""", RegexOption.IGNORE_CASE),
+        Regex("""\bNEFT/([A-Za-z0-9]{8,30})/""", RegexOption.IGNORE_CASE)
     )
 
     private val merchantPatterns = listOf(
         Regex("""(?:to|at|for|towards|merchant)\s*[:\-]?\s*([A-Za-z0-9&._'@/-]{2,50})""", RegexOption.IGNORE_CASE),
+        Regex(""";\s*([^;\n]+?)\s+credited(?:\.|\s|$)""", RegexOption.IGNORE_CASE),
+        Regex("""Info:\s*NEFT/[^/]+/([^\n]+?)(?:\.|\s+New\s+bal|$)""", RegexOption.IGNORE_CASE),
         Regex("""(?:VPA|UPI)\s*[:\-]?\s*([A-Za-z0-9._-]+@[A-Za-z0-9._-]+)""", RegexOption.IGNORE_CASE),
         Regex("""(?:from|by|via)\s*[:\-]?\s*([A-Za-z0-9&._'@/-]{2,50})""", RegexOption.IGNORE_CASE)
     )
@@ -49,8 +52,10 @@ object TransactionParser {
     fun parse(id: Long, sender: String, timestamp: Long, body: String): Transaction? {
         if (!isLikelyFinancialSms(sender, body)) return null
 
-        val amount = extractAmount(body) ?: return null
         val lower = body.lowercase(Locale.ROOT)
+        if (isUpcomingOrMandate(lower)) return null
+
+        val amount = extractAmount(body) ?: return null
 
         val type = when {
             debitWords.containsMatchIn(lower) && !isPureCreditMessage(lower) -> TransactionType.DEBIT
@@ -72,14 +77,7 @@ object TransactionParser {
         ).count { it }
 
         val confidence = (senderScore + transactionScore * 10).coerceIn(0, 100)
-        val dedupeKey = buildDedupeKey(
-            sender = sender,
-            amount = amount,
-            type = type,
-            merchant = merchant,
-            reference = reference,
-            timestamp = timestamp
-        )
+        val dedupeKey = buildDedupeKey(sender, amount, type, merchant, reference, timestamp)
 
         return Transaction(
             id = id,
@@ -101,6 +99,22 @@ object TransactionParser {
             pattern.find(body)?.groupValues?.get(1)?.replace(",", "")?.toDoubleOrNull()?.let { return it }
         }
         return null
+    }
+
+    private fun isUpcomingOrMandate(lower: String): Boolean {
+        val futureSignals = listOf(
+            "will be debited",
+            "will be credited",
+            "to be debited",
+            "to be credited",
+            "scheduled to be debited",
+            "scheduled debit",
+            "upcoming debit",
+            "pause mandate",
+            "merchantmandate",
+            "upi mandate"
+        )
+        return futureSignals.any { it in lower }
     }
 
     private fun isLikelyFinancialSms(sender: String, body: String): Boolean {
@@ -155,8 +169,7 @@ object TransactionParser {
             return "ref:" + reference.uppercase(Locale.ROOT).trim()
         }
 
-        val normalizedMerchant = merchant.lowercase(Locale.ROOT)
-            .replace(Regex("[^a-z0-9]"), "")
+        val normalizedMerchant = merchant.lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]"), "")
         val timeBucket = timestamp / 120000L
         return "fp:" + type.name + ":" + "%.2f".format(Locale.US, amount) + ":" +
             normalizedMerchant + ":" + timeBucket
@@ -169,6 +182,7 @@ object TransactionParser {
             listOf("salary", "payroll", "salary credit").any { it in text } -> "Salary"
             listOf("refund", "reversal", "reverted").any { it in text } -> "Refund"
             "cashback" in text -> "Cashback"
+            listOf("zerodha", "groww", "indmoney", "upstox", "angel one", "broker").any { it in text } -> "Investments"
             else -> "Other income"
         }
 
@@ -178,8 +192,9 @@ object TransactionParser {
             listOf("petrol", "fuel", "hpcl", "bpcl", "iocl", "bharat petroleum", "indian oil").any { it in text } -> "Fuel"
             listOf("uber", "ola", "rapido", "metro", "irctc", "redbus").any { it in text } -> "Transport"
             listOf("electricity", "water bill", "broadband", "airtel", "jio", "vi ", "recharge", "dth").any { it in text } -> "Bills"
-            listOf("sip", "mutual fund", "groww", "zerodha", "coin", "investment", "nps").any { it in text } -> "Investments"
+            listOf("sip", "mutual fund", "groww", "zerodha", "coin", "investment", "nps", "indmoney", "brokerage", "broking").any { it in text } -> "Investments"
             listOf("atm", "cash withdrawal", "cash withdrawn").any { it in text } -> "Cash withdrawal"
+            listOf("transfer", "credited", "rrn").any { it in text } && merchant != "Unknown" -> "Transfers"
             else -> "Other"
         }
     }
