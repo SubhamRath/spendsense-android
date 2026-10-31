@@ -30,8 +30,8 @@ class MainActivity : ComponentActivity() {
     private var transactions by mutableStateOf<List<Transaction>>(emptyList())
     private var categories by mutableStateOf<List<CategoryEntity>>(emptyList())
     private val smsPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) scanSms()
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->
+            if (permissions[Manifest.permission.READ_SMS] == true) scanSms()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,9 +67,21 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun requestSmsPermission() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) ==
-            PackageManager.PERMISSION_GRANTED) scanSms()
-        else smsPermissionLauncher.launch(Manifest.permission.READ_SMS)
+        val readGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.READ_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+        val receiveGranted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECEIVE_SMS) ==
+            PackageManager.PERMISSION_GRANTED
+
+        if (readGranted && receiveGranted) {
+            scanSms()
+        } else {
+            smsPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.READ_SMS,
+                    Manifest.permission.RECEIVE_SMS
+                )
+            )
+        }
     }
 
     private fun scanSms() {
