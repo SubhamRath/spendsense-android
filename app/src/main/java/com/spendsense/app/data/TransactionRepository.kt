@@ -1,7 +1,7 @@
 package com.spendsense.app.data
 
 import android.content.Context
-import com.spendsense.app.sms.SmsScanner
+import com.spendsense.app.sms.SmsScanner\nimport com.spendsense.app.parser.TransactionParser
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
@@ -20,6 +20,30 @@ class TransactionRepository private constructor(context: Context) {
 
     fun observeTransactions(): Flow<List<TransactionEntity>> = transactions.observeAll()
     fun observeCategories(): Flow<List<CategoryEntity>> = categories.observeAll()
+
+    suspend fun processIncomingSms(
+        id: Long,
+        sender: String,
+        timestamp: Long,
+        body: String
+    ) {
+        val transaction = TransactionParser.parse(
+            id = id,
+            sender = sender,
+            timestamp = timestamp,
+            body = body
+        ) ?: return
+
+        val matchingRule = rules.observeEnabled().first().firstOrNull { rule ->
+            when (rule.matchType) {
+                "VPA" -> transaction.rawMessage.contains(rule.matchValue, ignoreCase = true)
+                else -> transaction.merchant.equals(rule.matchValue, ignoreCase = true)
+            }
+        }
+
+        val categorized = matchingRule?.let { transaction.copy(category = it.category) } ?: transaction
+        transactions.upsertAll(listOf(categorized.toEntity()))
+    }
 
     suspend fun scanAndPersist(context: Context) {
         val currentRules = rules.observeEnabled().first()
