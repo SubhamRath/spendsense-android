@@ -54,6 +54,7 @@ object TransactionParser {
         if (!isLikelyFinancialSms(sender, body)) return null
 
         val lower = body.lowercase(Locale.ROOT)
+        if (isSafetyVeto(lower)) return null
         if (isUpcomingOrMandate(lower)) return null
 
         val amount = extractAmount(body) ?: return null
@@ -112,6 +113,21 @@ object TransactionParser {
             pattern.find(body)?.groupValues?.getOrNull(1)?.replace(",", "")?.toDoubleOrNull()?.let { return it }
         }
         return null
+    }
+
+    private fun isSafetyVeto(lower: String): Boolean {
+        val vetoSignals = listOf(
+            "otp", "one time password", "verification code", "authentication code",
+            "offer", "cashback offer", "limited time", "sale", "promo", "promotional",
+            "win ", "winner", "congratulations",
+            "transaction failed", "payment failed", "failed transaction",
+            "transaction declined", "payment declined", "declined transaction",
+            "transaction cancelled", "payment cancelled", "cancelled transaction",
+            "transaction unsuccessful", "payment unsuccessful",
+            "credit card bill", "card bill", "bill payment due", "minimum amount due",
+            "total amount due", "statement generated"
+        )
+        return vetoSignals.any { it in lower }
     }
 
     private fun isUpcomingOrMandate(lower: String): Boolean {
@@ -201,7 +217,7 @@ object TransactionParser {
 
         if (type == TransactionType.CREDIT) return when {
             listOf("salary", "payroll", "salary credit").any { it in text } -> "Salary"
-            listOf("refund", "reversal", "reverted").any { it in text } -> "Refund"
+            listOf("refund", "reversal", "reverted", "reversed").any { it in text } -> "Refund"
             "cashback" in text -> "Cashback"
             listOf("zerodha", "groww", "indmoney", "upstox", "angel one", "broker").any { it in text } -> "Investments"
             else -> "Other income"
