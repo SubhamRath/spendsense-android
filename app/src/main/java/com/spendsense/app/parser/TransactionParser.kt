@@ -30,7 +30,7 @@ object TransactionParser {
         "AXISBK", "AXISBANK", "KOTAKB", "KOTAK", "IDFCFB", "IDFC",
         "YESBK", "YESBANK", "INDUSB", "INDUSIND", "PNBSMS", "PNB",
         "BOIIND", "BOI", "CANBNK", "CANARA", "UBIBNK", "UNIONBK",
-        "BARBOD", "BOB", "PAYTM", "GPAY", "PHONEPE", "AMAZONPAY",
+        "BARBOD", "BOB", "UCO", "UCOBANK", "PAYTM", "GPAY", "PHONEPE", "AMAZONPAY",
         "JUSPAY", "RAZORPAY", "CCAVENUE"
     )
 
@@ -43,6 +43,7 @@ object TransactionParser {
 
     private val merchantPatterns = listOf(
         Regex("""(?:to|at|for|towards|merchant)\s*[:\-]?\s*([A-Za-z0-9&._'@/-]{2,50})""", RegexOption.IGNORE_CASE),
+        Regex("""\bby\s+(UCO-UPI|UCO|UCOBANK)\s*\.\s*(?:Avl|Available)\b""", RegexOption.IGNORE_CASE),
         Regex(""";\s*([^;\n]+?)\s+credited(?:\.|\s|$)""", RegexOption.IGNORE_CASE),
         Regex("""Info:\s*NEFT/[^/]+/([^\n]+?)(?:\.|\s+New\s+bal|$)""", RegexOption.IGNORE_CASE),
         Regex("""(?:VPA|UPI)\s*[:\-]?\s*([A-Za-z0-9._-]+@[A-Za-z0-9._-]+)""", RegexOption.IGNORE_CASE),
@@ -151,6 +152,8 @@ object TransactionParser {
         merchantPatterns.forEach { pattern ->
             pattern.find(body)?.groupValues?.getOrNull(1)?.let {
                 val cleaned = it.trim().trimEnd('.', ',', ';', ':')
+                val normalized = cleaned.uppercase(Locale.ROOT).replace(Regex("[^A-Z0-9]"), "")
+                if (normalized in setOf("UCOUPI", "UCO", "UCOBANK")) return "Unknown"
                 if (cleaned.length >= 2) return cleaned
             }
         }
