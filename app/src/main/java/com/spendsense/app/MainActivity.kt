@@ -103,57 +103,94 @@ private fun Dashboard(
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onAddCategory: (String) -> Unit
 ) {
-    var selectedPeriod by remember { mutableStateOf(Period.MONTH) }
-    val filtered = remember(transactions, selectedPeriod) { transactions.filterBy(selectedPeriod) }
-    val income = filtered.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
-    val expenses = filtered.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
-    val transfers = filtered.filter { it.type == TransactionType.DEBIT && it.category == "Transfers" }.sumOf { it.amount }
+    var displayedMonth by remember { mutableStateOf(Calendar.getInstance().get(Calendar.MONTH)) }
+    var displayedYear by remember { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
+    var selectedDay by remember { mutableStateOf<Int?>(null) }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
-
+    val monthTransactions = remember(transactions, displayedMonth, displayedYear) { transactions.filterByMonth(displayedYear, displayedMonth) }
+    val monthIncome = monthTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
+    val monthExpenses = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
+    val selectedTransactions = selectedDay?.let { day ->
+        monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
+    } ?: emptyList()
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                Text("SpendSense", style = MaterialTheme.typography.headlineMedium)
-                Text("Your money at a glance", style = MaterialTheme.typography.bodyMedium)
-            }
+            Column { Text("SpendSense", style = MaterialTheme.typography.headlineMedium); Text("Your money at a glance", style = MaterialTheme.typography.bodyMedium) }
             TextButton(onClick = onScan) { Text("Scan SMS") }
         }
         Spacer(Modifier.height(14.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Period.values().forEach { period ->
-                FilterChip(selected = selectedPeriod == period, onClick = { selectedPeriod = period }, label = { Text(period.label) })
-            }
+        MonthHeader(displayedYear, displayedMonth, {
+            if (displayedMonth == Calendar.JANUARY) { displayedMonth = Calendar.DECEMBER; displayedYear-- } else displayedMonth--; selectedDay = null
+        }, {
+            if (displayedMonth == Calendar.DECEMBER) { displayedMonth = Calendar.JANUARY; displayedYear++ } else displayedMonth++; selectedDay = null
+        })
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MetricCard("Earned", currency.format(monthIncome), Modifier.weight(1f))
+            MetricCard("Spent", currency.format(monthExpenses), Modifier.weight(1f))
         }
-        Spacer(Modifier.height(16.dp))
-        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MetricCard("Earned", currency.format(income), Modifier.weight(1f))
-                    MetricCard("Spent", currency.format(expenses), Modifier.weight(1f))
-                }
-            }
-            item { MetricCard("Net cash flow", currency.format(income - expenses), Modifier.fillMaxWidth()) }
-            item {
-                Text("Spending by category", style = MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(6.dp))
-                val breakdown = filtered.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }
-                    .groupBy { it.category }.mapValues { (_, items) -> items.sumOf { it.amount } }
-                    .toList().sortedByDescending { it.second }.take(6)
-                if (breakdown.isEmpty()) Text("No spending recorded for this period.")
-                else breakdown.forEach { (category, amount) ->
-                    Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text(category)
-                        Text(currency.format(amount))
-                    }
-                }
-                if (transfers > 0) Text("Transfers excluded from spending: " + currency.format(transfers), style = MaterialTheme.typography.bodySmall)
-            }
-            item { Text("Transactions (" + filtered.size + ")", style = MaterialTheme.typography.titleLarge) }
-            if (filtered.isEmpty()) item { Text("No transactions in this period.") }
-            else items(filtered.take(100), key = { it.id }) { TransactionRow(it, currency, categories, onChangeCategory, onAddCategory) }
+        Spacer(Modifier.height(10.dp))
+        MetricCard("Net cash flow", currency.format(monthIncome - monthExpenses), Modifier.fillMaxWidth())
+        Spacer(Modifier.height(14.dp))
+        CalendarView(displayedYear, displayedMonth, monthTransactions, selectedDay) { selectedDay = it }
+        selectedDay?.let { day ->
+            Spacer(Modifier.height(14.dp))
+            Text("Transactions on " + dayLabel(displayedYear, displayedMonth, day), style = MaterialTheme.typography.titleLarge)
+            Spacer(Modifier.height(6.dp))
+            if (selectedTransactions.isEmpty()) Text("No transactions on this date.")
+            else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) { items(selectedTransactions, key = { it.id }) { TransactionRow(it, currency, categories, onChangeCategory, onAddCategory) } }
         }
     }
 }
+
+@Composable
+private fun MonthHeader(year: Int, month: Int, onPrevious: () -> Unit, onNext: () -> Unit) {
+    val label = java.text.SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Calendar.getInstance().apply { set(year, month, 1) }.time)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        TextButton(onClick = onPrevious) { Text("‹") }; Text(label, style = MaterialTheme.typography.titleLarge); TextButton(onClick = onNext) { Text("›") }
+    }
+}
+
+@Composable
+private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>, selectedDay: Int?, onDayClick: (Int) -> Unit) {
+    val calendar = Calendar.getInstance().apply { set(year, month, 1) }
+    val firstDay = calendar.get(Calendar.DAY_OF_WEEK)
+    val daysInMonth = calendar.getActualMaximum(Calendar.DAY_OF_MONTH)
+    val leading = (firstDay - Calendar.MONDAY + 7) % 7
+    val cells = ((leading + daysInMonth + 6) / 7) * 7
+    val byDay = transactions.groupBy { Calendar.getInstance().apply { timeInMillis = it.timestamp }.get(Calendar.DAY_OF_MONTH) }
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(10.dp)) {
+            Row(Modifier.fillMaxWidth()) { listOf("M","T","W","T","F","S","S").forEach { Text(it, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium) } }
+            Spacer(Modifier.height(6.dp))
+            for (row in 0 until cells / 7) {
+                Row(Modifier.fillMaxWidth()) {
+                    for (col in 0..6) {
+                        val day = row * 7 + col - leading + 1
+                        if (day < 1 || day > daysInMonth) Spacer(Modifier.weight(1f).height(64.dp))
+                        else {
+                            val dayTransactions = byDay[day].orEmpty()
+                            val income = dayTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
+                            val spent = dayTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
+                            Card(onClick = { onDayClick(day) }, modifier = Modifier.weight(1f).padding(2.dp), colors = CardDefaults.cardColors(containerColor = if (selectedDay == day) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
+                                Column(Modifier.fillMaxWidth().height(64.dp).padding(5.dp)) {
+                                    Text(day.toString(), style = MaterialTheme.typography.labelLarge)
+                                    if (income > 0) Text("+" + compactAmount(income), style = MaterialTheme.typography.labelSmall)
+                                    if (spent > 0) Text("-" + compactAmount(spent), style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(6.dp)); Text("+ earnings   - spending   • tap a date for details", style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+private fun compactAmount(amount: Double): String = if (amount >= 100000) String.format(Locale.getDefault(), "%.1fL", amount / 100000) else if (amount >= 1000) String.format(Locale.getDefault(), "%.1fk", amount / 1000) else String.format(Locale.getDefault(), "%.0f", amount)
+private fun dayLabel(year: Int, month: Int, day: Int): String = java.text.SimpleDateFormat("dd MMMM yyyy", Locale.getDefault()).format(Calendar.getInstance().apply { set(year, month, day) }.time)
+private fun List<Transaction>.filterByMonth(year: Int, month: Int): List<Transaction> = filter { val c = Calendar.getInstance().apply { timeInMillis = it.timestamp }; c.get(Calendar.YEAR) == year && c.get(Calendar.MONTH) == month }
 
 @Composable
 private fun SpendSenseTheme(content: @Composable () -> Unit) {
