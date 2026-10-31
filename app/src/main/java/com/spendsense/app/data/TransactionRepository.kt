@@ -1,7 +1,8 @@
 package com.spendsense.app.data
 
 import android.content.Context
-import com.spendsense.app.sms.SmsScanner\nimport com.spendsense.app.parser.TransactionParser
+import com.spendsense.app.sms.SmsScanner
+import com.spendsense.app.parser.TransactionParser
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
