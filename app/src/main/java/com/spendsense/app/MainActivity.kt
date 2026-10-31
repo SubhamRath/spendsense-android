@@ -172,11 +172,42 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                             val dayTransactions = byDay[day].orEmpty()
                             val income = dayTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
                             val spent = dayTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
-                            Card(onClick = { onDayClick(day) }, modifier = Modifier.weight(1f).padding(2.dp), colors = CardDefaults.cardColors(containerColor = if (selectedDay == day) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant)) {
-                                Column(Modifier.fillMaxWidth().height(64.dp).padding(5.dp)) {
+                            val hasIncome = income > 0
+                            val hasSpending = spent > 0
+                            val cellColor = when {
+                                selectedDay == day -> MaterialTheme.colorScheme.primaryContainer
+                                hasIncome && hasSpending -> MaterialTheme.colorScheme.tertiaryContainer
+                                hasIncome -> MaterialTheme.colorScheme.secondaryContainer
+                                hasSpending -> MaterialTheme.colorScheme.errorContainer
+                                else -> MaterialTheme.colorScheme.surfaceVariant
+                            }
+                            Card(
+                                onClick = { onDayClick(day) },
+                                modifier = Modifier.weight(1f).padding(2.dp),
+                                colors = CardDefaults.cardColors(containerColor = cellColor)
+                            ) {
+                                Column(
+                                    Modifier.fillMaxWidth().height(78.dp).padding(5.dp),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
                                     Text(day.toString(), style = MaterialTheme.typography.labelLarge)
-                                    if (income > 0) Text("+" + compactAmount(income), style = MaterialTheme.typography.labelSmall)
-                                    if (spent > 0) Text("-" + compactAmount(spent), style = MaterialTheme.typography.labelSmall)
+                                    if (hasIncome) {
+                                        Text(
+                                            "↑ ₹" + compactAmount(income),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    if (hasSpending) {
+                                        Text(
+                                            "↓ ₹" + compactAmount(spent),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                    if (!hasIncome && !hasSpending) {
+                                        Text("—", style = MaterialTheme.typography.labelSmall)
+                                    }
                                 }
                             }
                         }
