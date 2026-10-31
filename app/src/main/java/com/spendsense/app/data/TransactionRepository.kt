@@ -6,10 +6,13 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 
 class TransactionRepository private constructor(context: Context) {
-    private val db = SpendSenseDatabase.get(context)
+    private val appContext = context.applicationContext
+    private val db = SpendSenseDatabase.get(appContext)
     private val transactions = db.transactionDao()
     private val categories = db.categoryDao()
     private val rules = db.categoryRuleDao()
+    private val scanState = appContext.getSharedPreferences("sms_scan_state", Context.MODE_PRIVATE)
+    private val lastScannedTimestampKey = "last_scanned_sms_timestamp"
 
     suspend fun seedDefaultCategories() {
         CategoryDefaults.names.forEach { categories.insert(CategoryEntity(it, false)) }
@@ -20,7 +23,9 @@ class TransactionRepository private constructor(context: Context) {
 
     suspend fun scanAndPersist(context: Context) {
         val currentRules = rules.observeEnabled().first()
-        val scanned = SmsScanner.scan(context).map { transaction ->
+        val lastScannedTimestamp = scanState.getLong(lastScannedTimestampKey, 0L).takeIf { it > 0L }
+        val scanResult = SmsScanner.scan(context, lastScannedTimestamp)
+        val scanned = scanResult.transactions.map { transaction ->
             val matchingRule = currentRules.firstOrNull { rule ->
                 when (rule.matchType) {
                     "VPA" -> transaction.rawMessage.contains(rule.matchValue, ignoreCase = true)
@@ -31,6 +36,10 @@ class TransactionRepository private constructor(context: Context) {
             else transaction
         }
         transactions.upsertAll(scanned.map { it.toEntity() })
+
+        scanResult.newestSmsTimestamp?.let { newest ->
+            scanState.edit().putLong(lastScannedTimestampKey, newest).apply()
+        }
     }
 
     suspend fun setCategory(smsId: Long, category: String) {
