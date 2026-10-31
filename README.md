@@ -4,7 +4,7 @@ SpendSense is an Android personal-finance app that reads transaction SMS message
 
 ## Current version
 
-**0.1.0 — Foundation**
+**0.5.0 — Automatic SMS tracking**
 
 - Kotlin + Jetpack Compose
 - Basic dashboard
@@ -13,13 +13,14 @@ SpendSense is an Android personal-finance app that reads transaction SMS message
 
 ## Roadmap
 
-- [ ] SMS permission and scanner
-- [ ] Transaction parser
+- [x] SMS read/receive permissions and scanner
+- [x] Automatic background processing of incoming SMS
+- [x] Safety-first transaction parser
 - [x] Room database and persistent transactions
   - [x] Custom categories
   - [x] Change category for one transaction
   - [x] Apply category rules to future merchant transactions
-- [ ] Automatic categorization
+- [x] Rule-based automatic categorization and merchant learning
 - [ ] Transaction list and search
 - [ ] Interactive charts
 - [ ] Monthly analytics
