@@ -224,7 +224,8 @@ object TransactionParser {
         }
 
         return when {
-            listOf("swiggy", "zomato", "restaurant", "food", "cafe", "domino", "blinkit", "zepto", "instamart").any { it in text } -> "Food"
+            listOf("swiggy", "zomato", "restaurant", "food", "cafe", "domino", "pizza", "burger").any { it in text } -> "Food"
+            listOf("blinkit", "zepto", "instamart", "bigbasket", "jiomart", "grofers", "dmart", "supermarket", "grocery", "groceries", "quick commerce").any { it in text } -> "Groceries"
             listOf("amazon", "flipkart", "myntra", "ajio", "shopping").any { it in text } -> "Shopping"
             listOf("petrol", "fuel", "hpcl", "bpcl", "iocl", "bharat petroleum", "indian oil").any { it in text } -> "Fuel"
             listOf("uber", "ola", "rapido", "metro", "irctc", "redbus").any { it in text } -> "Transport"
