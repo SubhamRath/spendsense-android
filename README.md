@@ -15,7 +15,10 @@ SpendSense is an Android personal-finance app that reads transaction SMS message
 
 - [ ] SMS permission and scanner
 - [ ] Transaction parser
-- [ ] Room database
+- [x] Room database and persistent transactions
+  - [x] Custom categories
+  - [x] Change category for one transaction
+  - [x] Apply category rules to future merchant transactions
 - [ ] Automatic categorization
 - [ ] Transaction list and search
 - [ ] Interactive charts
