@@ -6,7 +6,12 @@ import com.spendsense.app.data.Transaction
 import com.spendsense.app.parser.TransactionParser
 
 object SmsScanner {
-    fun scan(context: Context): List<Transaction> {
+    data class ScanResult(
+        val transactions: List<Transaction>,
+        val newestSmsTimestamp: Long?
+    )
+
+    fun scan(context: Context, sinceTimestamp: Long? = null): ScanResult {
         val parsed = mutableListOf<Transaction>()
         val projection = arrayOf(
             Telephony.Sms._ID,
@@ -15,11 +20,13 @@ object SmsScanner {
             Telephony.Sms.DATE
         )
 
+        var newestSmsTimestamp: Long? = null
+
         context.contentResolver.query(
             Telephony.Sms.Inbox.CONTENT_URI,
             projection,
-            null,
-            null,
+            sinceTimestamp?.let { "${Telephony.Sms.DATE} > ?" },
+            sinceTimestamp?.let { arrayOf(it.toString()) },
             "${Telephony.Sms.DATE} DESC"
         )?.use { cursor ->
             val idIndex = cursor.getColumnIndexOrThrow(Telephony.Sms._ID)
@@ -28,16 +35,23 @@ object SmsScanner {
             val dateIndex = cursor.getColumnIndexOrThrow(Telephony.Sms.DATE)
 
             while (cursor.moveToNext()) {
+                val smsTimestamp = cursor.getLong(dateIndex)
+                if (newestSmsTimestamp == null || smsTimestamp > newestSmsTimestamp!!) {
+                    newestSmsTimestamp = smsTimestamp
+                }
                 TransactionParser.parse(
                     id = cursor.getLong(idIndex),
                     sender = cursor.getString(addressIndex).orEmpty(),
-                    timestamp = cursor.getLong(dateIndex),
+                    timestamp = smsTimestamp,
                     body = cursor.getString(bodyIndex).orEmpty()
                 )?.let(parsed::add)
             }
         }
 
-        return deduplicate(parsed)
+        return ScanResult(
+            transactions = deduplicate(parsed),
+            newestSmsTimestamp = newestSmsTimestamp
+        )
     }
 
     private fun deduplicate(transactions: List<Transaction>): List<Transaction> {
