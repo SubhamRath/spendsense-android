@@ -72,9 +72,10 @@ class TransactionRepository private constructor(context: Context) {
     }
 
     suspend fun setCategoryForMerchant(merchant: String, category: String) {
-        if (merchant.isBlank() || merchant == "Unknown") return
-        rules.insert(CategoryRule(matchValue = merchant.trim(), category = category))
-        transactions.applyCategoryToMerchant(merchant, category)
+        val cleanMerchant = merchant.trim()
+        if (cleanMerchant.isBlank() || cleanMerchant.equals("Unknown", ignoreCase = true)) return
+        rules.insert(CategoryRule(matchValue = cleanMerchant, category = category))
+        transactions.applyCategoryToMerchant(cleanMerchant, category)
     }
 
     suspend fun addCustomCategory(name: String) {
