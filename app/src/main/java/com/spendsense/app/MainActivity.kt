@@ -543,7 +543,7 @@ private fun TargetsPage(
                 )
             }
             TextButton(onClick = {
-                selectedCategory = categories.firstOrNull { it != "Investments" && it != "Transfers" } ?: "Food"
+                selectedCategory = categories.filter { it != "Investments" && it != "Transfers" }.sorted().firstOrNull() ?: "Food"
                 showCategoryDialog = true
             }) { Text("＋ Add") }
         }
@@ -622,7 +622,7 @@ private fun TargetsPage(
 
     if (showCategoryDialog) {
         CategoryTargetDialog(
-            categories = categories.filter { it != "Investments" && it != "Transfers" },
+            categories = categories.filter { it != "Investments" && it != "Transfers" }.sorted(),
             selectedCategory = selectedCategory,
             prefs = prefs,
             year = displayedYear,
