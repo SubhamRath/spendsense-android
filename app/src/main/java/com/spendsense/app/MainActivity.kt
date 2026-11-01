@@ -689,6 +689,8 @@ private fun CategoryTargetDialog(
 @Composable
 private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
     var range by remember { mutableStateOf(7) }
+    var editingRecurring by remember { mutableStateOf<RecurringCandidate?>(null) }
+    var recurringCandidates by remember(transactions) { mutableStateOf(findRecurringCandidates(transactions)) }
     val now = Calendar.getInstance()
     val start = Calendar.getInstance().apply {
         timeInMillis = now.timeInMillis
@@ -726,6 +728,8 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
     val otherTotal = rawByCategory.drop(5).sumOf { it.second }
     val byCategory = topCategories + if (otherTotal > 0) listOf("Other" to otherTotal) else emptyList()
     val totalSpent = spending.sumOf { it.amount }
+    val income = transactions.filter { it.type == TransactionType.CREDIT && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
+    val invested = transactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
 
     Column(
         modifier
@@ -744,8 +748,6 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
             FilterChip(range == 7, { range = 7 }, label = { Text("7 days") })
             FilterChip(range == 30, { range = 30 }, label = { Text("30 days") })
         }
-        val income = transactions.filter { it.type == TransactionType.CREDIT && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
-        val invested = transactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("Earned", currencyFormat(income), Modifier.weight(1f))
             MetricCard("Spent", currencyFormat(totalSpent), Modifier.weight(1f))
@@ -755,7 +757,169 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
         SpendingBarChart(days, daily, spending)
         Spacer(Modifier.height(12.dp))
         CategoryPieChart(byCategory, totalSpent, spending)
+
+        Spacer(Modifier.height(18.dp))
+        Text("Recurring Payments", style = MaterialTheme.typography.titleLarge)
+        Text(
+            "Detected from repeated monthly transactions",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
+
+        if (recurringCandidates.isEmpty()) {
+            Card(Modifier.fillMaxWidth()) {
+                Text(
+                    "No recurring payments detected yet.",
+                    modifier = Modifier.padding(16.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            recurringCandidates.forEach { candidate ->
+                val accent = recurringAccent(candidate.category)
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = accent.copy(alpha = 0.14f)
+                    )
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier.size(42.dp).background(
+                                accent.copy(alpha = 0.22f),
+                                MaterialTheme.shapes.medium
+                            ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "↻",
+                                fontSize = 23.sp,
+                                color = accent
+                            )
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(
+                                candidate.merchant,
+                                style = MaterialTheme.typography.titleMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                candidate.category + " • " + candidate.count + " payments",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                currencyFormat(candidate.averageAmount) + " / month",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = accent
+                            )
+                        }
+                        TextButton(onClick = { editingRecurring = candidate }) {
+                            Text("Edit", color = accent)
+                        }
+                    }
+                }
+            }
+        }
     }
+
+    editingRecurring?.let { candidate ->
+        RecurringPaymentEditDialog(
+            candidate = candidate,
+            categories = (transactions.map { it.category } + listOf("Bills", "Subscriptions", "Insurance", "Investments", "Other")).distinct().sorted(),
+            onUpdate = { updated ->
+                recurringCandidates = recurringCandidates.map {
+                    if (it.merchant == candidate.merchant) updated else it
+                }
+                editingRecurring = null
+            },
+            onDelete = {
+                recurringCandidates = recurringCandidates.filterNot { it.merchant == candidate.merchant }
+                editingRecurring = null
+            },
+            onDismiss = { editingRecurring = null }
+        )
+    }
+}
+
+@Composable
+private fun RecurringPaymentEditDialog(
+    candidate: RecurringCandidate,
+    categories: List<String>,
+    onUpdate: (RecurringCandidate) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    var amountText by remember(candidate) { mutableStateOf(String.format(Locale.getDefault(), "%.2f", candidate.averageAmount)) }
+    var category by remember(candidate) { mutableStateOf(candidate.category) }
+    var categoryExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit Recurring Payment") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(candidate.merchant, style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(
+                    value = amountText,
+                    onValueChange = { amountText = it },
+                    label = { Text("Monthly amount") },
+                    singleLine = true
+                )
+                Box {
+                    OutlinedButton(onClick = { categoryExpanded = true }) {
+                        Text("Category: $category")
+                    }
+                    DropdownMenu(
+                        expanded = categoryExpanded,
+                        onDismissRequest = { categoryExpanded = false }
+                    ) {
+                        categories.forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item) },
+                                onClick = {
+                                    category = item
+                                    categoryExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val amount = amountText.toDoubleOrNull()
+                if (amount != null && amount > 0) {
+                    onUpdate(candidate.copy(averageAmount = amount, category = category))
+                }
+            }) {
+                Text("Update")
+            }
+        },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                TextButton(onClick = onDelete) { Text("Delete", color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+}
+
+private fun recurringAccent(category: String): Color = when (category.lowercase(Locale.ROOT)) {
+    "bills" -> Color(0xFF64B5F6)
+    "insurance" -> Color(0xFFFFB74D)
+    "subscriptions" -> Color(0xFFBA68C8)
+    "investments" -> Color(0xFF66BB6A)
+    "food" -> Color(0xFFFF8A65)
+    "groceries" -> Color(0xFF26A69A)
+    else -> Color(0xFF8AB4F8)
 }
 
 @Composable
@@ -1156,26 +1320,6 @@ private fun HomePage(
         Spacer(Modifier.height(12.dp))
         CalendarView(displayedYear, displayedMonth, monthTransactions, selectedDay) { selectedDay = it }
 
-        val recurring = findRecurringCandidates(transactions)
-        if (recurring.isNotEmpty()) {
-            Spacer(Modifier.height(14.dp))
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(14.dp)) {
-                    Text("Potential recurring payments", style = MaterialTheme.typography.titleMedium)
-                    Text("Based on repeated merchant and monthly timing", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.height(8.dp))
-                    recurring.take(3).forEach { item ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Column(Modifier.weight(1f)) {
-                                Text(item.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(item.category + " • " + item.count + " payments", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                            }
-                            Text(currency.format(item.averageAmount), style = MaterialTheme.typography.labelMedium)
-                        }
-                    }
-                }
-            }
-        }
 
         selectedDay?.let { day ->
             Spacer(Modifier.height(14.dp))
