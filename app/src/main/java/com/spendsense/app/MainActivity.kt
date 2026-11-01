@@ -635,7 +635,11 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
     val byDay = transactions.groupBy { Calendar.getInstance().apply { timeInMillis = it.timestamp }.get(Calendar.DAY_OF_MONTH) }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(10.dp)) {
-            Row(Modifier.fillMaxWidth()) { listOf("M","T","W","T","F","S","S").forEach { Text(it, Modifier.weight(1f), style = MaterialTheme.typography.labelMedium) } }
+            Row(Modifier.fillMaxWidth()) {
+                listOf("M","T","W","T","F","S","S").forEach {
+                    Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium)
+                }
+            }
             Spacer(Modifier.height(6.dp))
             for (row in 0 until cells / 7) {
                 Row(Modifier.fillMaxWidth()) {
@@ -662,15 +666,17 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                                 colors = CardDefaults.cardColors(containerColor = cellColor)
                             ) {
                                 Column(
-                                    Modifier.fillMaxWidth().height(40.dp).padding(4.dp),
-                                    verticalArrangement = Arrangement.spacedBy(1.dp)
+                                    Modifier.fillMaxWidth().height(40.dp).padding(3.dp),
+                                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
-                                    Text(day.toString(), style = MaterialTheme.typography.labelLarge)
+                                    Text(day.toString(), style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
                                     if (hasIncome) {
                                         Text(
                                             "↑" + compactAmount(income),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFF9BE7B5),
+                                            textAlign = TextAlign.Center,
                                             maxLines = 1
                                         )
                                     }
@@ -679,11 +685,12 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                                             "↓" + compactAmount(spent),
                                             style = MaterialTheme.typography.labelSmall,
                                             color = Color(0xFFFFB0B0),
+                                            textAlign = TextAlign.Center,
                                             maxLines = 1
                                         )
                                     }
                                     if (!hasIncome && !hasSpending) {
-                                        Text("—", style = MaterialTheme.typography.labelSmall)
+                                        Text("—", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                                     }
                                 }
                             }
