@@ -880,7 +880,8 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
                     candidate.copy(
                         merchant = recurringPrefs.getString("merchant_$key", candidate.merchant) ?: candidate.merchant,
                         averageAmount = recurringPrefs.getString("amount_$key", null)?.toDoubleOrNull() ?: candidate.averageAmount,
-                        category = recurringPrefs.getString("category_$key", candidate.category) ?: candidate.category
+                        category = recurringPrefs.getString("category_$key", candidate.category) ?: candidate.category,
+                        dayOfMonth = recurringPrefs.getInt("day_$key", candidate.dayOfMonth)
                     )
                 }
             }
@@ -1070,6 +1071,7 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
                     .putString("merchant_$key", updated.merchant.trim())
                     .putString("amount_$key", updated.averageAmount.toString())
                     .putString("category_$key", updated.category)
+                    .putInt("day_$key", updated.dayOfMonth)
                     .apply()
                 recurringCandidates = recurringCandidates.map {
                     if (it.merchant == candidate.merchant) updated else it
@@ -1174,9 +1176,11 @@ private fun RecurringPaymentEditDialog(
     onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
     var merchantText by remember(candidate) { mutableStateOf(candidate.merchant) }
     var amountText by remember(candidate) { mutableStateOf(String.format(Locale.getDefault(), "%.2f", candidate.averageAmount)) }
     var category by remember(candidate) { mutableStateOf(candidate.category) }
+    var dayOfMonth by remember(candidate) { mutableIntStateOf(candidate.dayOfMonth.coerceIn(1, 31)) }
     var categoryExpanded by remember { mutableStateOf(false) }
 
     AlertDialog(
@@ -1196,6 +1200,22 @@ private fun RecurringPaymentEditDialog(
                     label = { Text("Monthly amount") },
                     singleLine = true
                 )
+                OutlinedButton(
+                    onClick = {
+                        val now = Calendar.getInstance()
+                        now.set(Calendar.DAY_OF_MONTH, dayOfMonth.coerceAtMost(now.getActualMaximum(Calendar.DAY_OF_MONTH)))
+                        DatePickerDialog(
+                            context,
+                            { _, _, _, selectedDay -> dayOfMonth = selectedDay },
+                            now.get(Calendar.YEAR),
+                            now.get(Calendar.MONTH),
+                            dayOfMonth.coerceAtMost(now.getActualMaximum(Calendar.DAY_OF_MONTH))
+                        ).show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Recurring date: " + dayOfMonth + daySuffix(dayOfMonth) + " of each month")
+                }
                 Box {
                     OutlinedButton(onClick = { categoryExpanded = true }) {
                         Text("Category: $category")
@@ -1225,7 +1245,8 @@ private fun RecurringPaymentEditDialog(
                         candidate.copy(
                             merchant = merchantText.trim(),
                             averageAmount = amount,
-                            category = category
+                            category = category,
+                            dayOfMonth = dayOfMonth
                         )
                     )
                 }
@@ -1244,6 +1265,14 @@ private fun RecurringPaymentEditDialog(
 
 private fun recurringKey(merchant: String): String =
     merchant.trim().lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "_").trim('_')
+
+private fun daySuffix(day: Int): String = when {
+    day in 11..13 -> "th"
+    day % 10 == 1 -> "st"
+    day % 10 == 2 -> "nd"
+    day % 10 == 3 -> "rd"
+    else -> "th"
+}
 
 private fun recurringAccent(category: String): Color = when (category.lowercase(Locale.ROOT)) {
     "bills" -> Color(0xFF64B5F6)
@@ -1839,7 +1868,8 @@ data class RecurringCandidate(
     val merchant: String,
     val category: String,
     val averageAmount: Double,
-    val count: Int
+    val count: Int,
+    val dayOfMonth: Int
 )
 
 private fun findRecurringCandidates(transactions: List<Transaction>): List<RecurringCandidate> {
@@ -1855,7 +1885,13 @@ private fun findRecurringCandidates(transactions: List<Transaction>): List<Recur
             val avg = sorted.map { it.amount }.average()
             val amountStable = sorted.all { kotlin.math.abs(it.amount - avg) / avg <= 0.15 }
             if (monthlyIntervals.size >= 2 && amountStable) {
-                RecurringCandidate(sorted.last().merchant, sorted.last().category, avg, sorted.size)
+                RecurringCandidate(
+                    sorted.last().merchant,
+                    sorted.last().category,
+                    avg,
+                    sorted.size,
+                    Calendar.getInstance().apply { timeInMillis = sorted.last().timestamp }.get(Calendar.DAY_OF_MONTH)
+                )
             } else null
         }
         .sortedByDescending { it.count }
