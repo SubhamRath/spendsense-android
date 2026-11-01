@@ -73,6 +73,9 @@ class MainActivity : ComponentActivity() {
                         onChangeBank = { transaction, bank ->
                             lifecycleScope.launch { repository.setBank(transaction.id, bank) }
                         },
+                        onDeleteTransaction = { transaction ->
+                            lifecycleScope.launch { repository.deleteTransaction(transaction.id) }
+                        },
                         onAddCategory = { name ->
                             lifecycleScope.launch { repository.addCustomCategory(name) }
                         },
@@ -117,6 +120,7 @@ private fun SpendSenseApp(
     onScan: () -> Unit,
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit,
     onAddCategory: (String) -> Unit,
     onAddTransaction: (Double, TransactionType, String, String, String) -> Unit
 ) {
@@ -148,8 +152,8 @@ private fun SpendSenseApp(
         }
     ) { padding ->
         when (page) {
-            0 -> HomePage(transactions, categories, onScan, onChangeCategory, onChangeBank, onAddCategory, Modifier.padding(padding))
-            1 -> ActivityPage(transactions, categories, onChangeCategory, onChangeBank, onAddCategory, onAddTransaction, Modifier.padding(padding))
+            0 -> HomePage(transactions, categories, onScan, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory, Modifier.padding(padding))
+            1 -> ActivityPage(transactions, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory, onAddTransaction, Modifier.padding(padding))
             else -> GraphsPage(transactions, Modifier.padding(padding))
         }
     }
@@ -178,7 +182,7 @@ private fun ActivityPage(
                 contentPadding = PaddingValues(bottom = 90.dp)
             ) {
                 items(transactions, key = { it.id }) { transaction ->
-                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onAddCategory)
+                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory)
                 }
             }
         }
@@ -351,6 +355,7 @@ private fun HomePage(
     onScan: () -> Unit,
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit,
     onAddCategory: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -574,12 +579,14 @@ private fun TransactionRow(
     categories: List<String>,
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit,
     onAddCategory: (String) -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     var confirmExpanded by remember { mutableStateOf(false) }
     var addCategoryExpanded by remember { mutableStateOf(false) }
     var bankDialog by remember { mutableStateOf(false) }
+    var deleteDialog by remember { mutableStateOf(false) }
     var selectedCategory by remember(transaction.category) { mutableStateOf(transaction.category) }
     var newCategory by remember { mutableStateOf("") }
 
@@ -615,6 +622,9 @@ private fun TransactionRow(
             TextButton(onClick = { menuExpanded = true }) {
                 Text("Category")
             }
+            TextButton(onClick = { deleteDialog = true }) {
+                Text("Delete", color = MaterialTheme.colorScheme.error)
+            }
         }
     }
 
@@ -637,6 +647,27 @@ private fun TransactionRow(
             onClick = {
                 menuExpanded = false
                 addCategoryExpanded = true
+            }
+        )
+    }
+
+    if (deleteDialog) {
+        AlertDialog(
+            onDismissRequest = { deleteDialog = false },
+            title = { Text("Delete transaction?") },
+            text = { Text("This transaction will be permanently removed from SpendSense.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteTransaction(transaction)
+                    deleteDialog = false
+                }) {
+                    Text("Delete", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteDialog = false }) {
+                    Text("Cancel")
+                }
             }
         )
     }
