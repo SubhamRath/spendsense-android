@@ -275,6 +275,7 @@ private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
 @Composable
 private fun CategoryPieChart(categories: List<Map.Entry<String, Double>>) {
     val total = categories.sumOf { it.value }
+    val pieColor = MaterialTheme.colorScheme.primary
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
             Text("Spending by category", style = MaterialTheme.typography.titleMedium)
@@ -289,7 +290,7 @@ private fun CategoryPieChart(categories: List<Map.Entry<String, Double>>) {
                         categories.take(6).forEachIndexed { index, entry ->
                             val sweep = (entry.value / total * 360.0).toFloat()
                             drawArc(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f + index * 0.11f),
+                                color = pieColor.copy(alpha = 0.25f + index * 0.11f),
                                 startAngle = startAngle,
                                 sweepAngle = sweep,
                                 useCenter = true
