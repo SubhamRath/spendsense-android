@@ -75,6 +75,10 @@ class TransactionRepository private constructor(context: Context) {
         transactions.updateBank(smsId, bank.trim().ifBlank { "Cash" })
     }
 
+    suspend fun deleteTransaction(smsId: Long) {
+        transactions.deleteTransaction(smsId)
+    }
+
     suspend fun addManualTransaction(
         amount: Double,
         type: TransactionType,
