@@ -666,8 +666,8 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                                 colors = CardDefaults.cardColors(containerColor = cellColor)
                             ) {
                                 Column(
-                                    Modifier.fillMaxWidth().height(40.dp).padding(3.dp),
-                                    verticalArrangement = Arrangement.spacedBy(1.dp),
+                                    Modifier.fillMaxWidth().height(58.dp).padding(horizontal = 3.dp, vertical = 3.dp),
+                                    verticalArrangement = Arrangement.spacedBy(0.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
                                     Text(day.toString(), style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
