@@ -178,7 +178,7 @@ private fun ActivityPage(
     onDeleteTransaction: (Transaction) -> Unit,
     onEditTransaction: (Transaction, Double, TransactionType, String, Long) -> Unit,
     onAddCategory: (String) -> Unit,
-    onAddTransaction: (Double, TransactionType, String, String, Long) -> Unit,
+    onAddTransaction: (Double, TransactionType, String, String, String, Long) -> Unit,
     modifier: Modifier
 ) {
     var showAdd by remember { mutableStateOf(false) }
@@ -424,6 +424,13 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             FilterChip(range == 7, { range = 7 }, label = { Text("7 days") })
             FilterChip(range == 30, { range = 30 }, label = { Text("30 days") })
+        }
+        val income = transactions.filter { it.type == TransactionType.CREDIT && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
+        val invested = transactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MetricCard("Earned", currencyFormat(income), Modifier.weight(1f))
+            MetricCard("Spent", currencyFormat(totalSpent), Modifier.weight(1f))
+            MetricCard("Invested", currencyFormat(invested), Modifier.weight(1f))
         }
         Spacer(Modifier.height(14.dp))
         SpendingBarChart(days, daily, spending)
