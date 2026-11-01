@@ -13,6 +13,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
@@ -111,6 +112,7 @@ private fun Dashboard(
     val monthTransactions = remember(transactions, displayedMonth, displayedYear) { transactions.filterByMonth(displayedYear, displayedMonth) }
     val monthIncome = monthTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
     val monthExpenses = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
+    val monthInvested = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" }.sumOf { it.amount }
     val selectedTransactions = selectedDay?.let { day ->
         monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
     } ?: emptyList()
@@ -132,9 +134,10 @@ private fun Dashboard(
             if (displayedMonth == Calendar.DECEMBER) { displayedMonth = Calendar.JANUARY; displayedYear++ } else displayedMonth++; selectedDay = null
         })
         Spacer(Modifier.height(12.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("Earned", currency.format(monthIncome), Modifier.weight(1f))
             MetricCard("Spent", currency.format(monthExpenses), Modifier.weight(1f))
+            MetricCard("Invested", currency.format(monthInvested), Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
         MetricCard("Net cash flow", currency.format(monthIncome - monthExpenses), Modifier.fillMaxWidth())
@@ -186,10 +189,11 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                             val hasIncome = income > 0
                             val hasSpending = spent > 0
                             val cellColor = when {
-                                selectedDay == day -> MaterialTheme.colorScheme.primaryContainer
-                                hasIncome && hasSpending -> MaterialTheme.colorScheme.tertiaryContainer
-                                hasIncome -> MaterialTheme.colorScheme.secondaryContainer
-                                hasSpending -> MaterialTheme.colorScheme.errorContainer
+                                selectedDay == day -> Color(0xFF3949AB)
+                                hasIncome && hasSpending && income > spent -> Color(0xFF355E3B)
+                                hasIncome && hasSpending -> Color(0xFF6B3F45)
+                                hasIncome -> Color(0xFF1F6B45)
+                                hasSpending -> Color(0xFF8F2020)
                                 else -> MaterialTheme.colorScheme.surfaceVariant
                             }
                             Card(
@@ -198,22 +202,24 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                                 colors = CardDefaults.cardColors(containerColor = cellColor)
                             ) {
                                 Column(
-                                    Modifier.fillMaxWidth().height(78.dp).padding(5.dp),
-                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                    Modifier.fillMaxWidth().height(58.dp).padding(4.dp),
+                                    verticalArrangement = Arrangement.spacedBy(1.dp)
                                 ) {
                                     Text(day.toString(), style = MaterialTheme.typography.labelLarge)
                                     if (hasIncome) {
                                         Text(
-                                            "↑ ₹" + compactAmount(income),
+                                            "↑" + compactAmount(income),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = Color(0xFF9BE7B5),
+                                            maxLines = 1
                                         )
                                     }
                                     if (hasSpending) {
                                         Text(
-                                            "↓ ₹" + compactAmount(spent),
+                                            "↓" + compactAmount(spent),
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.error
+                                            color = Color(0xFFFFB0B0),
+                                            maxLines = 1
                                         )
                                     }
                                     if (!hasIncome && !hasSpending) {
@@ -225,7 +231,8 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                     }
                 }
             }
-            Spacer(Modifier.height(6.dp)); Text("+ earnings   - spending   • tap a date for details", style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(6.dp))
+            Text("Green = cash positive  •  Red = spending  •  tap a date for details", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
