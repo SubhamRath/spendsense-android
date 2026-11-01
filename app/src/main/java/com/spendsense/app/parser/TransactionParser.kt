@@ -42,7 +42,9 @@ object TransactionParser {
     )
 
     private val merchantPatterns = listOf(
-        Regex("""(?:to|at|for|towards|merchant)\s*[:\-]?\s*([A-Za-z0-9&._'@/-]{2,50})""", RegexOption.IGNORE_CASE),
+        // Axis UPI/P2A SMS: beneficiary follows the transaction reference, before the "Not you?" text.
+        Regex("""UPI/P2A/[^/\\r\\n]+/([^\\r\\n]+?)(?=\\s+Not\\s+you\\?|$)""", RegexOption.IGNORE_CASE),
+        Regex("""(?:to|at|for|towards|merchant)\\s*[:\\-]?\\s*([A-Za-z0-9&._\'@/-]{2,50})""", RegexOption.IGNORE_CASE),
         Regex("""\bby\s+(UCO-UPI|UCO|UCOBANK)\s*\.\s*(?:Avl|Available)\b""", RegexOption.IGNORE_CASE),
         Regex(""";\s*([^;\n]+?)\s+credited(?:\.|\s|$)""", RegexOption.IGNORE_CASE),
         Regex("""Info:\s*NEFT/[^/]+/([^\n]+?)(?:\.|\s+New\s+bal|$)""", RegexOption.IGNORE_CASE),
