@@ -695,9 +695,11 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                         else {
                             val dayTransactions = byDay[day].orEmpty()
                             val income = dayTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
-                            val spent = dayTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
+                            val spent = dayTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" && it.category != "Investments" }.sumOf { it.amount }
+                            val invested = dayTransactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" }.sumOf { it.amount }
                             val hasIncome = income > 0
                             val hasSpending = spent > 0
+                            val hasInvestment = invested > 0
                             val cellColor = when {
                                 selectedDay == day -> Color(0xFF3949AB)
                                 hasIncome && hasSpending && income > spent -> Color(0xFF355E3B)
@@ -735,7 +737,16 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                                             maxLines = 1
                                         )
                                     }
-                                    if (!hasIncome && !hasSpending) {
+                                    if (hasInvestment) {
+                                        Text(
+                                            "↗" + compactAmount(invested),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFFFFD180),
+                                            textAlign = TextAlign.Center,
+                                            maxLines = 1
+                                        )
+                                    }
+                                    if (!hasIncome && !hasSpending && !hasInvestment) {
                                         Text("—", style = MaterialTheme.typography.labelSmall, textAlign = TextAlign.Center)
                                     }
                                 }
@@ -745,7 +756,7 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                 }
             }
             Spacer(Modifier.height(6.dp))
-            Text("Green = cash positive  •  Red = spending  •  tap a date for details", style = MaterialTheme.typography.bodySmall)
+            Text("↑ income  •  ↓ spending  •  ↗ investments  •  tap a date for details", style = MaterialTheme.typography.bodySmall)
         }
     }
 }
