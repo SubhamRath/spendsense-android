@@ -39,6 +39,7 @@ import com.spendsense.app.data.TransactionRepository
 import com.spendsense.app.data.toTransaction
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
 import java.util.Locale
@@ -1116,8 +1117,16 @@ private fun HomePage(
     val selectedTransactions = selectedDay?.let { day ->
         monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
     } ?: emptyList()
+    val homeScrollState = rememberScrollState()
 
-    Column(modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp).verticalScroll(rememberScrollState())) {
+    LaunchedEffect(selectedDay, selectedTransactions.size) {
+        if (selectedDay != null) {
+            delay(100)
+            homeScrollState.animateScrollTo(homeScrollState.maxValue)
+        }
+    }
+
+    Column(modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp).verticalScroll(homeScrollState)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column { Text("SpendSense", style = MaterialTheme.typography.headlineMedium); Text("Your money at a glance", style = MaterialTheme.typography.bodyMedium) }
             TextButton(onClick = onScan) { Text("Scan SMS") }
