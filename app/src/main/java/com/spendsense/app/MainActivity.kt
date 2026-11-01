@@ -275,6 +275,20 @@ private fun ActivityPage(
                     }
                 }
             }
+            val hasFilters = query.isNotBlank() || typeFilter != null || categoryFilter != null || bankFilter != null || monthFilter != null || sortMode != "Newest"
+            if (hasFilters) {
+                TextButton(
+                    onClick = {
+                        query = ""
+                        typeFilter = null
+                        categoryFilter = null
+                        bankFilter = null
+                        monthFilter = null
+                        sortMode = "Newest"
+                    },
+                    modifier = Modifier.align(Alignment.End)
+                ) { Text("Clear filters") }
+            }
             Spacer(Modifier.height(8.dp))
             LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 90.dp)) {
                 val monthGroups = filteredTransactions.groupBy {
