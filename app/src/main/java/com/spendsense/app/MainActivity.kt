@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
@@ -821,7 +823,7 @@ private fun bankBrandColors(name: String): Pair<Color, Color> = when (name) {
     "PhonePe" -> Color(0xFF5F259F) to Color.White
     "Google Pay" -> Color(0xFFFFFFFF) to Color(0xFF202124)
     "Amazon Pay" -> Color(0xFFFFB300) to Color(0xFF111111)
-    else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
+    else -> Color(0xFF2A3038) to Color.White
 }
 
 private fun bankDisplayName(sender: String): String {
@@ -848,6 +850,36 @@ private fun bankDisplayName(sender: String): String {
         else -> "Cash"
     }
 }
+
+@Composable
+private fun BankDialog(
+    current: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var bankName by remember(current) { mutableStateOf(current) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit account") },
+        text = {
+            OutlinedTextField(
+                value = bankName,
+                onValueChange = { bankName = it },
+                label = { Text("Bank / Cash") },
+                singleLine = true
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(bankName.trim().ifBlank { "Cash" }) }) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
+}
+
 
 
 @Composable
