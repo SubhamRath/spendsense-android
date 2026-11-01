@@ -577,6 +577,9 @@ private fun CategoryPieChart(
 ) {
     var selectedCategory by remember { mutableStateOf<String?>(null) }
     val slices = categories.filter { it.second > 0 }
+    val sliceColors = slices.indices.map { index ->
+        MaterialTheme.colorScheme.primary.copy(alpha = (1f - index * 0.12f).coerceAtLeast(0.35f))
+    }
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -595,7 +598,7 @@ private fun CategoryPieChart(
                         slices.forEachIndexed { index, (_, amount) ->
                             val sweep = (amount / total * 360.0).toFloat()
                             drawArc(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = (1f - index * 0.12f).coerceAtLeast(0.35f)),
+                                color = sliceColors[index],
                                 startAngle = startAngle,
                                 sweepAngle = sweep,
                                 useCenter = true
