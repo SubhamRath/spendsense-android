@@ -251,6 +251,7 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
 
 @Composable
 private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
+    val barColor = MaterialTheme.colorScheme.primary
     val maxValue = maxOf(1.0, values.maxOrNull() ?: 1.0)
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
@@ -261,7 +262,7 @@ private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
                     Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
                         if (values[i] > 0) Text(compactAmount(values[i]), style = MaterialTheme.typography.labelSmall, maxLines = 1)
                         Spacer(Modifier.height(3.dp))
-                        Box(Modifier.fillMaxWidth().fillMaxHeight((values[i] / maxValue).toFloat().coerceAtLeast(0.02f)).background(MaterialTheme.colorScheme.primary))
+                        Box(Modifier.fillMaxWidth().fillMaxHeight((values[i] / maxValue).toFloat().coerceAtLeast(0.02f)).background(barColor))
                         Spacer(Modifier.height(4.dp))
                         Text(SimpleDateFormat("EEE", Locale.getDefault()).format(day.time).take(1), style = MaterialTheme.typography.labelSmall)
                     }
@@ -521,6 +522,7 @@ private fun bankInitials(name: String): String = when {
     else -> name.take(3)
 }
 
+@Composable
 private fun MetricCard(title: String, value: String, modifier: Modifier) {
     Card(modifier) {
         Column(Modifier.padding(16.dp)) {
