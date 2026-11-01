@@ -800,6 +800,30 @@ private fun HomePage(
         }
         Spacer(Modifier.height(12.dp))
         CalendarView(displayedYear, displayedMonth, monthTransactions, selectedDay) { selectedDay = it }
+        val recurring = findRecurringCandidates(transactions)
+        if (recurring.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(14.dp)) {
+                    Text("Potential recurring payments", style = MaterialTheme.typography.titleMedium)
+                    Text("Based on repeated merchant and monthly timing", style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.height(8.dp))
+                    recurring.take(3).forEach { item ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f)) {
+                                Text(item.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(item.category + " • " + item.count + " payments",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(currency.format(item.averageAmount), style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                }
+            }
+        }
         selectedDay?.let { day ->
             Spacer(Modifier.height(14.dp))
             Text("Transactions on " + dayLabel(displayedYear, displayedMonth, day), style = MaterialTheme.typography.titleLarge)
@@ -910,6 +934,32 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
             Text("↑ income  •  ↓ spending  •  ↗ investments  •  tap a date for details", style = MaterialTheme.typography.bodySmall)
         }
     }
+}
+
+data class RecurringCandidate(
+    val merchant: String,
+    val category: String,
+    val averageAmount: Double,
+    val count: Int
+)
+
+private fun findRecurringCandidates(transactions: List<Transaction>): List<RecurringCandidate> {
+    val cutoff = System.currentTimeMillis() - 180L * 24L * 60L * 60L * 1000L
+    return transactions
+        .filter { it.type == TransactionType.DEBIT && it.timestamp >= cutoff && it.merchant != "Unknown" && it.category != "Transfers" }
+        .groupBy { it.merchant.trim().lowercase(Locale.ROOT) }
+        .mapNotNull { (_, items) ->
+            val sorted = items.sortedBy { it.timestamp }
+            if (sorted.size < 3) return@mapNotNull null
+            val intervals = sorted.zipWithNext().map { (a, b) -> (b.timestamp - a.timestamp).toDouble() / (24L * 60L * 60L * 1000L) }
+            val monthlyIntervals = intervals.filter { it in 25.0..35.0 }
+            val avg = sorted.map { it.amount }.average()
+            val amountStable = sorted.all { kotlin.math.abs(it.amount - avg) / avg <= 0.15 }
+            if (monthlyIntervals.size >= 2 && amountStable) {
+                RecurringCandidate(sorted.last().merchant, sorted.last().category, avg, sorted.size)
+            } else null
+        }
+        .sortedByDescending { it.count }
 }
 
 private fun compactAmount(amount: Double): String = if (amount >= 100000) String.format(Locale.getDefault(), "%.1fL", amount / 100000) else if (amount >= 1000) String.format(Locale.getDefault(), "%.1fk", amount / 1000) else String.format(Locale.getDefault(), "%.0f", amount)
