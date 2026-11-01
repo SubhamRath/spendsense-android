@@ -32,6 +32,7 @@ import com.spendsense.app.data.toTransaction
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.launch
 import java.text.NumberFormat
+import java.text.SimpleDateFormat
 import java.util.Locale
 
 private enum class Period(val label: String) { TODAY("Today"), WEEK("Week"), MONTH("Month"), YEAR("Year"), ALL("All time") }
@@ -456,15 +457,33 @@ private fun List<Transaction>.filterByMonth(year: Int, month: Int): List<Transac
 
 @Composable
 private fun SpendSenseTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = darkColorScheme(primary = androidx.compose.ui.graphics.Color(0xFF8AB4F8), background = androidx.compose.ui.graphics.Color(0xFF0B0F14), surface = androidx.compose.ui.graphics.Color(0xFF151A21), surfaceVariant = androidx.compose.ui.graphics.Color(0xFF20262E)), content = content)
+    MaterialTheme(
+        colorScheme = darkColorScheme(
+            primary = Color(0xFF8AB4F8),
+            background = Color(0xFF0B0F14),
+            surface = Color(0xFF151A21),
+            surfaceVariant = Color(0xFF20262E)
+        ),
+        content = content
+    )
 }
 
 @Composable
-@Composable
-private fun BankBadge(sender: String, modifier: Modifier, onClick: () -> Unit) {
+private fun BankBadge(
+    sender: String,
+    modifier: Modifier,
+    onClick: () -> Unit
+) {
     val name = bankDisplayName(sender)
-    Surface(onClick = onClick, modifier = modifier, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceVariant) {
-        Box(contentAlignment = Alignment.Center) { Text(if (name == "Cash") "₹" else bankInitials(name)) }
+    Surface(
+        onClick = onClick,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceVariant
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(if (name == "Cash") "₹" else bankInitials(name))
+        }
     }
 }
 
@@ -478,7 +497,7 @@ private fun bankDisplayName(sender: String): String {
         s.contains("IDFC") -> "IDFC FIRST"
         s.contains("UCO") -> "UCO"
         s.contains("KOTAK") -> "Kotak"
-        s.contains("YESBANK") -> "Yes Bank"
+        s.contains("YESBANK") || s.contains("YES BANK") -> "Yes Bank"
         s.contains("INDUSIND") -> "IndusInd"
         s.contains("PNB") -> "PNB"
         s.contains("BOB") || s.contains("BANKOFBARODA") -> "Bank of Baroda"
@@ -525,117 +544,158 @@ private fun TransactionRow(
     var confirmExpanded by remember { mutableStateOf(false) }
     var addCategoryExpanded by remember { mutableStateOf(false) }
     var bankDialog by remember { mutableStateOf(false) }
-    var selectedCategory by remember { mutableStateOf(transaction.category) }
+    var selectedCategory by remember(transaction.category) { mutableStateOf(transaction.category) }
     var newCategory by remember { mutableStateOf("") }
 
     Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            BankBadge(transaction.sender, Modifier.size(44.dp), onClick = { bankDialog = true })
+        Row(
+            Modifier.fillMaxWidth().padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            BankBadge(
+                transaction.sender,
+                Modifier.size(44.dp),
+                onClick = { bankDialog = true }
+            )
             Spacer(Modifier.width(10.dp))
             Column(Modifier.weight(1f)) {
-                Text(transaction.merchant, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(transaction.category + " • " + bankDisplayName(transaction.sender), style = MaterialTheme.typography.labelMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text((if (transaction.type == TransactionType.CREDIT) "+ " else "- ") + currency.format(transaction.amount))
-            }
-            TextButton(onClick = { menuExpanded = true }) { Text("Category") }
-        }
-
-            DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                categories.forEach { category ->
-                    DropdownMenuItem(
-                        text = { Text(category) },
-                        onClick = {
-                            selectedCategory = category
-                            menuExpanded = false
-                            confirmExpanded = true
-                        }
-                    )
-                }
-                DropdownMenuItem(
-                    text = { Text("+ Add new category") },
-                    onClick = {
-                        menuExpanded = false
-                        addCategoryExpanded = true
-                    }
+                Text(
+                    transaction.merchant,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    transaction.category + " • " + bankDisplayName(transaction.sender),
+                    style = MaterialTheme.typography.labelMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    (if (transaction.type == TransactionType.CREDIT) "+ " else "- ") +
+                        currency.format(transaction.amount)
                 )
             }
+            TextButton(onClick = { menuExpanded = true }) {
+                Text("Category")
+            }
+        }
+    }
 
-            if (bankDialog) {
-        var bankName by remember(transaction.sender) { mutableStateOf(bankDisplayName(transaction.sender)) }
+    DropdownMenu(
+        expanded = menuExpanded,
+        onDismissRequest = { menuExpanded = false }
+    ) {
+        categories.forEach { category ->
+            DropdownMenuItem(
+                text = { Text(category) },
+                onClick = {
+                    selectedCategory = category
+                    menuExpanded = false
+                    confirmExpanded = true
+                }
+            )
+        }
+        DropdownMenuItem(
+            text = { Text("+ Add new category") },
+            onClick = {
+                menuExpanded = false
+                addCategoryExpanded = true
+            }
+        )
+    }
+
+    if (bankDialog) {
+        var bankName by remember(transaction.sender) {
+            mutableStateOf(bankDisplayName(transaction.sender))
+        }
         AlertDialog(
             onDismissRequest = { bankDialog = false },
             title = { Text("Edit account") },
-            text = { OutlinedTextField(bankName, { bankName = it }, label = { Text("Bank / Cash") }, singleLine = true) },
-            confirmButton = { TextButton(onClick = { onChangeBank(transaction, bankName); bankDialog = false }) { Text("Save") } },
-            dismissButton = { TextButton(onClick = { bankDialog = false }) { Text("Cancel") } }
+            text = {
+                OutlinedTextField(
+                    value = bankName,
+                    onValueChange = { bankName = it },
+                    label = { Text("Bank / Cash") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onChangeBank(transaction, bankName.trim().ifBlank { "Cash" })
+                    bankDialog = false
+                }) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { bankDialog = false }) {
+                    Text("Cancel")
+                }
+            }
         )
     }
 
     if (confirmExpanded) {
-                AlertDialog(
-                    onDismissRequest = { confirmExpanded = false },
-                    title = { Text("Change category") },
-                    text = { Text("Apply " + selectedCategory + " to future " + transaction.merchant + " transactions too?") },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            confirmExpanded = false
-                            onChangeCategory(transaction, selectedCategory, true)
-                        }) { Text("This & future") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            confirmExpanded = false
-                            onChangeCategory(transaction, selectedCategory, false)
-                        }) { Text("Only this") }
-                    }
+        AlertDialog(
+            onDismissRequest = { confirmExpanded = false },
+            title = { Text("Change category") },
+            text = {
+                Text(
+                    "Apply $selectedCategory to future " +
+                        transaction.merchant + " transactions too?"
                 )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmExpanded = false
+                    onChangeCategory(transaction, selectedCategory, true)
+                }) {
+                    Text("This & future")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    confirmExpanded = false
+                    onChangeCategory(transaction, selectedCategory, false)
+                }) {
+                    Text("Only this")
+                }
             }
+        )
+    }
 
-            if (addCategoryExpanded) {
-                AlertDialog(
-                    onDismissRequest = { addCategoryExpanded = false },
-                    title = { Text("New category") },
-                    text = {
-                        OutlinedTextField(
-                            value = newCategory,
-                            onValueChange = { newCategory = it },
-                            label = { Text("Category name") },
-                            singleLine = true
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            if (newCategory.isNotBlank()) {
-                                onAddCategory(newCategory.trim())
-                                selectedCategory = newCategory.trim()
-                                addCategoryExpanded = false
-                                confirmExpanded = true
-                                newCategory = ""
-                            }
-                        }) { Text("Add") }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { addCategoryExpanded = false }) { Text("Cancel") }
-                    }
+    if (addCategoryExpanded) {
+        AlertDialog(
+            onDismissRequest = { addCategoryExpanded = false },
+            title = { Text("New category") },
+            text = {
+                OutlinedTextField(
+                    value = newCategory,
+                    onValueChange = { newCategory = it },
+                    label = { Text("Category name") },
+                    singleLine = true
                 )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val cleaned = newCategory.trim()
+                    if (cleaned.isNotBlank()) {
+                        onAddCategory(cleaned)
+                        selectedCategory = cleaned
+                        newCategory = ""
+                        addCategoryExpanded = false
+                        confirmExpanded = true
+                    }
+                }) {
+                    Text("Add")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { addCategoryExpanded = false }) {
+                    Text("Cancel")
+                }
             }
-        }
+        )
     }
-}
-
-private fun List<Transaction>.filterBy(period: Period): List<Transaction> {
-    if (period == Period.ALL) return this
-    val now = Calendar.getInstance()
-    val start = Calendar.getInstance().apply {
-        timeInMillis = now.timeInMillis
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
-        when (period) {
-            Period.TODAY -> Unit
-            Period.WEEK -> set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-            Period.MONTH -> set(Calendar.DAY_OF_MONTH, 1)
-            Period.YEAR -> set(Calendar.DAY_OF_YEAR, 1)
-            Period.ALL -> Unit
-        }
-    }
-    return filter { it.timestamp >= start.timeInMillis }
 }
