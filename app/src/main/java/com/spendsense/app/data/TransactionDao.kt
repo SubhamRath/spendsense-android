@@ -19,4 +19,7 @@ interface TransactionDao {
 
     @Query("UPDATE transactions SET category = :category WHERE smsId = :smsId")
     suspend fun updateCategory(smsId: Long, category: String)
+
+    @Query("UPDATE transactions SET sender = :bank WHERE smsId = :smsId")
+    suspend fun updateBank(smsId: Long, bank: String)
 }
