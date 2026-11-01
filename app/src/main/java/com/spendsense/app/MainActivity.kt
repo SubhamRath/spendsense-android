@@ -865,8 +865,18 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
             set(Calendar.MILLISECOND, 0)
         })
     }
+    val context = LocalContext.current
+    val recurringPrefs = remember {
+        context.getSharedPreferences("spendsense_recurring", android.content.Context.MODE_PRIVATE)
+    }
     var editingRecurring by remember { mutableStateOf<RecurringCandidate?>(null) }
-    var recurringCandidates by remember(transactions) { mutableStateOf(findRecurringCandidates(transactions)) }
+    var recurringCandidates by remember(transactions) {
+        mutableStateOf(
+            findRecurringCandidates(transactions).filterNot { candidate ->
+                recurringPrefs.getBoolean("deleted_" + candidate.merchant.trim().lowercase(Locale.ROOT), false)
+            }
+        )
+    }
 
     val start = Calendar.getInstance().apply {
         timeInMillis = anchor.timeInMillis
@@ -1050,6 +1060,8 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
                 editingRecurring = null
             },
             onDelete = {
+                val key = "deleted_" + candidate.merchant.trim().lowercase(Locale.ROOT)
+                recurringPrefs.edit().putBoolean(key, true).apply()
                 recurringCandidates = recurringCandidates.filterNot { it.merchant == candidate.merchant }
                 editingRecurring = null
             },
