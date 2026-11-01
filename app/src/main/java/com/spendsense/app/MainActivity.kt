@@ -1451,7 +1451,9 @@ private fun TransactionRow(
                         }
                     }
 
-                    Box {
+                    Box(
+                        modifier = Modifier.wrapContentSize(Alignment.TopEnd)
+                    ) {
                         TextButton(
                             onClick = { editMenuExpanded = true },
                             contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
@@ -1459,7 +1461,8 @@ private fun TransactionRow(
 
                         DropdownMenu(
                             expanded = editMenuExpanded,
-                            onDismissRequest = { editMenuExpanded = false }
+                            onDismissRequest = { editMenuExpanded = false },
+                            offset = DpOffset(0.dp, 4.dp)
                         ) {
                             DropdownMenuItem(
                                 text = { Text("Edit transaction") },
