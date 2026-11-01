@@ -872,8 +872,17 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
     var editingRecurring by remember { mutableStateOf<RecurringCandidate?>(null) }
     var recurringCandidates by remember(transactions) {
         mutableStateOf(
-            findRecurringCandidates(transactions).filterNot { candidate ->
-                recurringPrefs.getBoolean("deleted_" + candidate.merchant.trim().lowercase(Locale.ROOT), false)
+            findRecurringCandidates(transactions).mapNotNull { candidate ->
+                val key = recurringKey(candidate.merchant)
+                if (recurringPrefs.getBoolean("deleted_$key", false)) {
+                    null
+                } else {
+                    candidate.copy(
+                        merchant = recurringPrefs.getString("merchant_$key", candidate.merchant) ?: candidate.merchant,
+                        averageAmount = recurringPrefs.getString("amount_$key", null)?.toDoubleOrNull() ?: candidate.averageAmount,
+                        category = recurringPrefs.getString("category_$key", candidate.category) ?: candidate.category
+                    )
+                }
             }
         )
     }
@@ -1056,12 +1065,20 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
             candidate = candidate,
             categories = (transactions.map { it.category } + listOf("Bills", "Subscriptions", "Insurance", "Investments", "Other")).distinct().sorted(),
             onUpdate = { updated ->
-                recurringCandidates = recurringCandidates.map { if (it.merchant == candidate.merchant) updated else it }
+                val key = recurringKey(candidate.merchant)
+                recurringPrefs.edit()
+                    .putString("merchant_$key", updated.merchant.trim())
+                    .putString("amount_$key", updated.averageAmount.toString())
+                    .putString("category_$key", updated.category)
+                    .apply()
+                recurringCandidates = recurringCandidates.map {
+                    if (it.merchant == candidate.merchant) updated else it
+                }
                 editingRecurring = null
             },
             onDelete = {
-                val key = "deleted_" + candidate.merchant.trim().lowercase(Locale.ROOT)
-                recurringPrefs.edit().putBoolean(key, true).apply()
+                val key = recurringKey(candidate.merchant)
+                recurringPrefs.edit().putBoolean("deleted_$key", true).apply()
                 recurringCandidates = recurringCandidates.filterNot { it.merchant == candidate.merchant }
                 editingRecurring = null
             },
@@ -1157,6 +1174,7 @@ private fun RecurringPaymentEditDialog(
     onDelete: () -> Unit,
     onDismiss: () -> Unit
 ) {
+    var merchantText by remember(candidate) { mutableStateOf(candidate.merchant) }
     var amountText by remember(candidate) { mutableStateOf(String.format(Locale.getDefault(), "%.2f", candidate.averageAmount)) }
     var category by remember(candidate) { mutableStateOf(candidate.category) }
     var categoryExpanded by remember { mutableStateOf(false) }
@@ -1166,7 +1184,12 @@ private fun RecurringPaymentEditDialog(
         title = { Text("Edit Recurring Payment") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(candidate.merchant, style = MaterialTheme.typography.titleMedium)
+                OutlinedTextField(
+                    value = merchantText,
+                    onValueChange = { merchantText = it },
+                    label = { Text("Name / merchant") },
+                    singleLine = true
+                )
                 OutlinedTextField(
                     value = amountText,
                     onValueChange = { amountText = it },
@@ -1197,8 +1220,14 @@ private fun RecurringPaymentEditDialog(
         confirmButton = {
             Button(onClick = {
                 val amount = amountText.toDoubleOrNull()
-                if (amount != null && amount > 0) {
-                    onUpdate(candidate.copy(averageAmount = amount, category = category))
+                if (amount != null && amount > 0 && merchantText.trim().isNotBlank()) {
+                    onUpdate(
+                        candidate.copy(
+                            merchant = merchantText.trim(),
+                            averageAmount = amount,
+                            category = category
+                        )
+                    )
                 }
             }) {
                 Text("Update")
@@ -1212,6 +1241,9 @@ private fun RecurringPaymentEditDialog(
         }
     )
 }
+
+private fun recurringKey(merchant: String): String =
+    merchant.trim().lowercase(Locale.ROOT).replace(Regex("[^a-z0-9]+"), "_").trim('_')
 
 private fun recurringAccent(category: String): Color = when (category.lowercase(Locale.ROOT)) {
     "bills" -> Color(0xFF64B5F6)
