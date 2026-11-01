@@ -946,61 +946,66 @@ private fun TransactionRow(
                     color = if (transaction.type == TransactionType.CREDIT) Color(0xFF8FE3AE) else MaterialTheme.colorScheme.onSurface
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    TextButton(
-                        onClick = { categoryMenuExpanded = true },
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                    ) { Text("Category", fontSize = 12.sp) }
-                    TextButton(
-                        onClick = { editMenuExpanded = true },
-                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                    ) { Text("Edit", fontSize = 12.sp) }
+                    Box {
+                        TextButton(
+                            onClick = { categoryMenuExpanded = true },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) { Text("Category", fontSize = 12.sp) }
+
+                        DropdownMenu(
+                            expanded = categoryMenuExpanded,
+                            onDismissRequest = { categoryMenuExpanded = false }
+                        ) {
+                            categories.forEach { category ->
+                                DropdownMenuItem(
+                                    text = { Text(category) },
+                                    onClick = {
+                                        selectedCategory = category
+                                        categoryMenuExpanded = false
+                                        confirmExpanded = true
+                                    }
+                                )
+                            }
+                            HorizontalDivider()
+                            DropdownMenuItem(
+                                text = { Text("New category…") },
+                                onClick = {
+                                    categoryMenuExpanded = false
+                                    addCategoryExpanded = true
+                                }
+                            )
+                        }
+                    }
+
+                    Box {
+                        TextButton(
+                            onClick = { editMenuExpanded = true },
+                            contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                        ) { Text("Edit", fontSize = 12.sp) }
+
+                        DropdownMenu(
+                            expanded = editMenuExpanded,
+                            onDismissRequest = { editMenuExpanded = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Change account") },
+                                onClick = {
+                                    editMenuExpanded = false
+                                    bankDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                onClick = {
+                                    editMenuExpanded = false
+                                    deleteDialog = true
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }
-    }
-
-    DropdownMenu(
-        expanded = categoryMenuExpanded,
-        onDismissRequest = { categoryMenuExpanded = false }
-    ) {
-        categories.forEach { category ->
-            DropdownMenuItem(
-                text = { Text(category) },
-                onClick = {
-                    selectedCategory = category
-                    categoryMenuExpanded = false
-                    confirmExpanded = true
-                }
-            )
-        }
-        HorizontalDivider()
-        DropdownMenuItem(
-            text = { Text("New category…") },
-            onClick = {
-                categoryMenuExpanded = false
-                addCategoryExpanded = true
-            }
-        )
-    }
-
-    DropdownMenu(
-        expanded = editMenuExpanded,
-        onDismissRequest = { editMenuExpanded = false }
-    ) {
-        DropdownMenuItem(
-            text = { Text("Change account") },
-            onClick = {
-                editMenuExpanded = false
-                bankDialog = true
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-            onClick = {
-                editMenuExpanded = false
-                deleteDialog = true
-            }
-        )
     }
 
     if (bankDialog) {
