@@ -345,7 +345,20 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
 @Composable
 private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
     val barColor = MaterialTheme.colorScheme.primary
+    val gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
     val maxValue = maxOf(1.0, values.maxOrNull() ?: 1.0)
+    val chartMax = when {
+        maxValue <= 1000.0 -> 1000.0
+        maxValue <= 5000.0 -> 5000.0
+        maxValue <= 10000.0 -> 10000.0
+        maxValue <= 25000.0 -> 25000.0
+        maxValue <= 50000.0 -> 50000.0
+        maxValue <= 100000.0 -> 100000.0
+        maxValue <= 250000.0 -> 250000.0
+        else -> kotlin.math.ceil(maxValue / 100000.0) * 100000.0
+    }
+    val yTicks = listOf(chartMax, chartMax * 0.75, chartMax * 0.5, chartMax * 0.25, 0.0)
+
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -357,38 +370,133 @@ private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("Daily spending", style = MaterialTheme.typography.titleMedium)
-                Text("Peak " + compactAmount(maxValue), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Total " + compactAmount(values.sum()),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            Spacer(Modifier.height(14.dp))
-            Row(
-                Modifier.fillMaxWidth().height(190.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.Bottom
-            ) {
-                days.forEachIndexed { i, day ->
-                    Column(
-                        Modifier.weight(1f).fillMaxHeight(),
-                        verticalArrangement = Arrangement.Bottom,
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        if (values[i] > 0) {
-                            Text(compactAmount(values[i]), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                            Spacer(Modifier.height(3.dp))
-                        } else {
-                            Spacer(Modifier.height(14.dp))
-                        }
-                        Box(
-                            Modifier
-                                .fillMaxWidth()
-                                .fillMaxHeight((values[i] / maxValue).toFloat().coerceAtLeast(if (values[i] > 0) 0.025f else 0f))
-                                .background(barColor, MaterialTheme.shapes.small)
-                        )
-                        Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(12.dp))
+
+            Row(Modifier.fillMaxWidth().height(220.dp)) {
+                Column(
+                    Modifier.width(42.dp).fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.End
+                ) {
+                    yTicks.forEach { tick ->
                         Text(
-                            SimpleDateFormat("EEE", Locale.getDefault()).format(day.time).take(1),
+                            compactAmount(tick),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
                         )
+                    }
+                }
+
+                Spacer(Modifier.width(8.dp))
+
+                if (days.size <= 7) {
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        Column(
+                            Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            repeat(5) {
+                                HorizontalDivider(color = gridColor, thickness = 1.dp)
+                            }
+                        }
+
+                        Row(
+                            Modifier.fillMaxSize().padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            days.forEachIndexed { i, day ->
+                                Column(
+                                    Modifier.weight(1f).fillMaxHeight(),
+                                    verticalArrangement = Arrangement.Bottom,
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    if (values[i] > 0) {
+                                        Text(
+                                            compactAmount(values[i]),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            maxLines = 1,
+                                            softWrap = false
+                                        )
+                                        Spacer(Modifier.height(4.dp))
+                                    } else {
+                                        Spacer(Modifier.height(18.dp))
+                                    }
+
+                                    Box(
+                                        Modifier
+                                            .fillMaxWidth(0.72f)
+                                            .height(
+                                                (150f * (values[i] / chartMax).toFloat())
+                                                    .coerceAtLeast(if (values[i] > 0) 3f else 0f)
+                                                    .dp
+                                            )
+                                            .background(barColor, MaterialTheme.shapes.small)
+                                    )
+                                    Spacer(Modifier.height(8.dp))
+                                    Text(
+                                        SimpleDateFormat("EEE", Locale.getDefault())
+                                            .format(day.time)
+                                            .take(1),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Row(
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(7.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        days.forEachIndexed { i, day ->
+                            Column(
+                                Modifier.width(34.dp).fillMaxHeight(),
+                                verticalArrangement = Arrangement.Bottom,
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                if (values[i] > 0) {
+                                    Text(
+                                        compactAmount(values[i]),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                    Spacer(Modifier.height(4.dp))
+                                } else {
+                                    Spacer(Modifier.height(18.dp))
+                                }
+
+                                Box(
+                                    Modifier
+                                        .fillMaxWidth(0.72f)
+                                        .height(
+                                            (150f * (values[i] / chartMax).toFloat())
+                                                .coerceAtLeast(if (values[i] > 0) 3f else 0f)
+                                                .dp
+                                        )
+                                        .background(barColor, MaterialTheme.shapes.small)
+                                )
+                                Spacer(Modifier.height(8.dp))
+                                Text(
+                                    SimpleDateFormat("dd", Locale.getDefault()).format(day.time),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
