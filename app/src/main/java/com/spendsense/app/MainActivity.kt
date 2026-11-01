@@ -870,6 +870,7 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
         context.getSharedPreferences("spendsense_recurring", android.content.Context.MODE_PRIVATE)
     }
     var editingRecurring by remember { mutableStateOf<RecurringCandidate?>(null) }
+    var viewingRecurring by remember { mutableStateOf<RecurringCandidate?>(null) }
     var autoScanRecurring by remember {
         mutableStateOf(recurringPrefs.getBoolean("auto_scan", true))
     }
@@ -1088,7 +1089,8 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
             recurringCandidates.forEach { candidate ->
                 val accent = recurringAccent(candidate.category)
                 Card(
-                    Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                    onClick = { viewingRecurring = candidate },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
                     colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.14f))
                 ) {
                     Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1107,6 +1109,17 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
                 }
             }
         }
+    }
+
+    viewingRecurring?.let { candidate ->
+        val entries = transactions
+            .filter { it.merchant.trim().equals(candidate.originalMerchant.trim(), ignoreCase = true) }
+            .sortedByDescending { it.timestamp }
+        RecurringPaymentEntriesDialog(
+            candidate = candidate,
+            entries = entries,
+            onDismiss = { viewingRecurring = null }
+        )
     }
 
     editingRecurring?.let { candidate ->
@@ -1214,6 +1227,72 @@ private fun YearlyMonthlyBarChart(year: Int, transactions: List<Transaction>) {
             Text("12-month view • use ‹ › above to change year", Modifier.fillMaxWidth().padding(top = 8.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
+}
+
+@Composable
+private fun RecurringPaymentEntriesDialog(
+    candidate: RecurringCandidate,
+    entries: List<Transaction>,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Column {
+                Text(candidate.merchant, style = MaterialTheme.typography.titleLarge)
+                Text(
+                    entries.size.toString() + " entries • " + currencyFormat(candidate.averageAmount) + " / month",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        text = {
+            if (entries.isEmpty()) {
+                Text("No matching transactions found.")
+            } else {
+                LazyColumn(
+                    modifier = Modifier.fillMaxWidth().heightIn(max = 380.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(entries) { transaction ->
+                        Card(
+                            Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            )
+                        ) {
+                            Row(
+                                Modifier.fillMaxWidth().padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(
+                                        SimpleDateFormat("dd MMM yyyy, hh:mm a", Locale.getDefault())
+                                            .format(Date(transaction.timestamp)),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                    Text(
+                                        transaction.category + " • " + bankDisplayName(transaction.sender),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                                Text(
+                                    currencyFormat(transaction.amount),
+                                    style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
 }
 
 @Composable
@@ -1917,7 +1996,8 @@ data class RecurringCandidate(
     val category: String,
     val averageAmount: Double,
     val count: Int,
-    val dayOfMonth: Int
+    val dayOfMonth: Int,
+    val originalMerchant: String
 )
 
 private fun findRecurringCandidates(transactions: List<Transaction>): List<RecurringCandidate> {
@@ -1938,7 +2018,8 @@ private fun findRecurringCandidates(transactions: List<Transaction>): List<Recur
                     sorted.last().category,
                     avg,
                     sorted.size,
-                    Calendar.getInstance().apply { timeInMillis = sorted.last().timestamp }.get(Calendar.DAY_OF_MONTH)
+                    Calendar.getInstance().apply { timeInMillis = sorted.last().timestamp }.get(Calendar.DAY_OF_MONTH),
+                    sorted.last().merchant
                 )
             } else null
         }
