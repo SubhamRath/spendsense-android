@@ -790,6 +790,7 @@ private fun HomePage(
     var displayedYear by remember { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
     var selectedDay by remember { mutableStateOf<Int?>(null) }
     var showBudgetDialog by remember { mutableStateOf(false) }
+    var showCategoryBudgetDialog by remember { mutableStateOf(false) }
     val context = LocalContext.current
     val prefs = remember { context.getSharedPreferences("spendsense_budget", android.content.Context.MODE_PRIVATE) }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
@@ -862,6 +863,13 @@ private fun HomePage(
             }
         }
 
+        if (categories.isNotEmpty()) {
+            Spacer(Modifier.height(10.dp))
+            TextButton(onClick = { showCategoryBudgetDialog = true }, modifier = Modifier.fillMaxWidth()) {
+                Text("Manage category budgets")
+            }
+        }
+
         val recurring = findRecurringCandidates(transactions)
         if (recurring.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
@@ -894,6 +902,17 @@ private fun HomePage(
                 }
             }
         }
+    }
+
+    if (showCategoryBudgetDialog) {
+        CategoryBudgetDialog(
+            categories = categories,
+            prefs = prefs,
+            year = displayedYear,
+            month = displayedMonth,
+            spending = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" && it.category != "Investments" },
+            onDismiss = { showCategoryBudgetDialog = false }
+        )
     }
 
     if (showBudgetDialog) {
@@ -1265,6 +1284,47 @@ private fun BankDialog(
 }
 
 
+
+@Composable
+private fun CategoryBudgetDialog(
+    categories: List<String>,
+    prefs: android.content.SharedPreferences,
+    year: Int,
+    month: Int,
+    spending: List<Transaction>,
+    onDismiss: () -> Unit
+) {
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "Food") }
+    var amount by remember { mutableStateOf("") }
+    val current = prefs.getFloat("category_" + year + "_" + month + "_" + selectedCategory, 0f).toDouble()
+    LaunchedEffect(selectedCategory) { amount = if (current > 0) current.toString() else "" }
+    val spent = spending.filter { it.category == selectedCategory }.sumOf { it.amount }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Category budget") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Category: " + selectedCategory)
+                Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    categories.take(8).forEach { category ->
+                        FilterChip(selectedCategory == category, { selectedCategory = category }, label = { Text(category) })
+                    }
+                }
+                OutlinedTextField(amount, { amount = it }, label = { Text("Monthly limit") }, prefix = { Text("₹") }, singleLine = true)
+                if (current > 0) Text("Spent: " + currencyFormat(spent), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                amount.toDoubleOrNull()?.takeIf { it > 0 }?.let {
+                    prefs.edit().putFloat("category_" + year + "_" + month + "_" + selectedCategory, it.toFloat()).apply()
+                    onDismiss()
+                }
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
 
 @Composable
 private fun BudgetDialog(current: Double, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
