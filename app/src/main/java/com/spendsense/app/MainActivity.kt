@@ -211,8 +211,8 @@ private fun ActivityPage(
         FloatingActionButton(onClick = { showAdd = true }, modifier = Modifier.align(Alignment.BottomEnd).padding(18.dp)) { Text("+") }
     }
     if (showAdd) {
-        AddTransactionDialog(categories, { showAdd = false }) { amount, type, merchant, category, bank ->
-            onAddTransaction(amount, type, merchant, category, bank)
+        AddTransactionDialog(categories, { showAdd = false }) { amount, type, merchant, category, bank, timestamp ->
+            onAddTransaction(amount, type, merchant, category, bank, timestamp)
             showAdd = false
         }
     }
@@ -231,6 +231,7 @@ private fun AddTransactionDialog(
     var category by remember { mutableStateOf(categories.firstOrNull() ?: "Other") }
     var categoryMenu by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf(Calendar.getInstance()) }
+    val context = LocalContext.current
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add transaction") },
@@ -248,7 +249,7 @@ private fun AddTransactionDialog(
                     onClick = {
                         val current = selectedDate
                         DatePickerDialog(
-                            LocalContext.current,
+                            context,
                             { _, year, month, day ->
                                 selectedDate = Calendar.getInstance().apply { set(year, month, day, 12, 0, 0) }
                             },
@@ -309,8 +310,8 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
         .sortedByDescending { it.value }
     val topCategories = rawByCategory.take(5)
     val otherTotal = rawByCategory.drop(5).sumOf { it.value }
-    val byCategory = buildList {
-        addAll(topCategories)
+    val byCategory: List<Pair<String, Double>> = buildList {
+        addAll(topCategories.map { it.key to it.value })
         if (otherTotal > 0) add("Other" to otherTotal)
     }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
@@ -351,8 +352,8 @@ private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
 }
 
 @Composable
-private fun CategoryPieChart(categories: List<Map.Entry<String, Double>>) {
-    val total = categories.sumOf { it.value }
+private fun CategoryPieChart(categories: List<Pair<String, Double>>) {
+    val total = categories.sumOf { it.second }
     val pieColor = MaterialTheme.colorScheme.primary
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(14.dp)) {
@@ -366,7 +367,7 @@ private fun CategoryPieChart(categories: List<Map.Entry<String, Double>>) {
                     Canvas(Modifier.size(180.dp)) {
                         var startAngle = -90f
                         categories.take(6).forEachIndexed { index, entry ->
-                            val sweep = (entry.value / total * 360.0).toFloat()
+                            val sweep = (entry.second / total * 360.0).toFloat()
                             drawArc(
                                 color = pieColor.copy(alpha = 0.25f + index * 0.11f),
                                 startAngle = startAngle,
@@ -379,7 +380,7 @@ private fun CategoryPieChart(categories: List<Map.Entry<String, Double>>) {
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         categories.take(6).forEach { entry ->
-                            Text(entry.key + ": " + compactAmount(entry.value), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(entry.first + ": " + compactAmount(entry.second), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (categories.size > 6) Text("+" + (categories.size - 6) + " more")
                     }
