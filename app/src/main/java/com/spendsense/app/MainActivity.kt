@@ -165,6 +165,7 @@ private fun ActivityPage(
     categories: List<String>,
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
+    onDeleteTransaction: (Transaction) -> Unit,
     onAddCategory: (String) -> Unit,
     onAddTransaction: (Double, TransactionType, String, String, String) -> Unit,
     modifier: Modifier
@@ -404,7 +405,7 @@ private fun HomePage(
             if (selectedTransactions.isEmpty()) Text("No transactions on this date.")
             else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 selectedTransactions.forEach { transaction ->
-                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onAddCategory)
+                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory)
                 }
             }
         }
