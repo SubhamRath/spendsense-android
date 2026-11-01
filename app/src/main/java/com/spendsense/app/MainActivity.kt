@@ -410,7 +410,7 @@ private fun SpendingBarChart(
                     Column(
                         Modifier
                             .fillMaxHeight()
-                            .then(if (days.size <= 7) Modifier.weight(1f) else Modifier.width(44.dp))
+                            .then(if (days.size <= 7) Modifier.fillMaxWidth(1f / days.size) else Modifier.width(44.dp))
                             .clickable { selectedDay = i },
                         verticalArrangement = Arrangement.Bottom,
                         horizontalAlignment = Alignment.CenterHorizontally
