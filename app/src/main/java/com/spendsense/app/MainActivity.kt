@@ -114,8 +114,13 @@ private fun Dashboard(
     val selectedTransactions = selectedDay?.let { day ->
         monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
     } ?: emptyList()
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp)) {
-        androidx.compose.foundation.verticalScroll(rememberScrollState()) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .verticalScroll(rememberScrollState())
+    ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column { Text("SpendSense", style = MaterialTheme.typography.headlineMedium); Text("Your money at a glance", style = MaterialTheme.typography.bodyMedium) }
             TextButton(onClick = onScan) { Text("Scan SMS") }
@@ -140,8 +145,11 @@ private fun Dashboard(
             Text("Transactions on " + dayLabel(displayedYear, displayedMonth, day), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
             if (selectedTransactions.isEmpty()) Text("No transactions on this date.")
-            else LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) { items(selectedTransactions, key = { it.id }) { TransactionRow(it, currency, categories, onChangeCategory, onAddCategory) } }
-        }
+            else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                selectedTransactions.forEach { transaction ->
+                    TransactionRow(transaction, currency, categories, onChangeCategory, onAddCategory)
+                }
+            }
         }
     }
 }
