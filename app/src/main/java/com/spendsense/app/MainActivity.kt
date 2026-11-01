@@ -82,6 +82,11 @@ class MainActivity : ComponentActivity() {
                         onDeleteTransaction = { transaction ->
                             lifecycleScope.launch { repository.deleteTransaction(transaction.id) }
                         },
+                        onEditTransaction = { transaction, amount, type, merchant, timestamp ->
+                            lifecycleScope.launch {
+                                repository.updateTransaction(transaction.id, amount, type, merchant, timestamp)
+                            }
+                        },
                         onAddCategory = { name ->
                             lifecycleScope.launch { repository.addCustomCategory(name) }
                         },
@@ -127,6 +132,7 @@ private fun SpendSenseApp(
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
+    onEditTransaction: (Transaction, Double, TransactionType, String, Long) -> Unit,
     onAddCategory: (String) -> Unit,
     onAddTransaction: (Double, TransactionType, String, String, String, Long) -> Unit
 ) {
@@ -157,7 +163,7 @@ private fun SpendSenseApp(
     ) { padding ->
         when (page) {
             0 -> HomePage(transactions, categories, onScan, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory, Modifier.padding(padding))
-            1 -> ActivityPage(transactions, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory, onAddTransaction, Modifier.padding(padding))
+            1 -> ActivityPage(transactions, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory, onAddTransaction, Modifier.padding(padding))
             else -> GraphsPage(transactions, Modifier.padding(padding))
         }
     }
@@ -170,6 +176,7 @@ private fun ActivityPage(
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
+    onEditTransaction: (Transaction, Double, TransactionType, String, Long) -> Unit,
     onAddCategory: (String) -> Unit,
     onAddTransaction: (Double, TransactionType, String, String, String, Long) -> Unit,
     modifier: Modifier
@@ -205,7 +212,7 @@ private fun ActivityPage(
                         )
                     }
                     items(monthTransactions, key = { it.id }) { transaction ->
-                        TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory)
+                        TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
                     }
                 }
             }
@@ -852,6 +859,84 @@ private fun bankDisplayName(sender: String): String {
 }
 
 @Composable
+private fun EditTransactionDialog(
+    transaction: Transaction,
+    onDismiss: () -> Unit,
+    onSave: (Double, TransactionType, String, Long) -> Unit
+) {
+    var amount by remember(transaction.id) { mutableStateOf(transaction.amount.toString()) }
+    var merchant by remember(transaction.id) { mutableStateOf(transaction.merchant) }
+    var type by remember(transaction.id) { mutableStateOf(transaction.type) }
+    var selectedDate by remember(transaction.id) {
+        mutableStateOf(Calendar.getInstance().apply { timeInMillis = transaction.timestamp })
+    }
+    val context = LocalContext.current
+    val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Edit transaction") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = type == TransactionType.DEBIT,
+                        onClick = { type = TransactionType.DEBIT },
+                        label = { Text("Spent") }
+                    )
+                    FilterChip(
+                        selected = type == TransactionType.CREDIT,
+                        onClick = { type = TransactionType.CREDIT },
+                        label = { Text("Earned") }
+                    )
+                }
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Amount") },
+                    singleLine = true
+                )
+                OutlinedTextField(
+                    value = merchant,
+                    onValueChange = { merchant = it },
+                    label = { Text("Merchant / description") },
+                    singleLine = true
+                )
+                OutlinedButton(
+                    onClick = {
+                        val current = selectedDate
+                        DatePickerDialog(
+                            context,
+                            { _, year, month, day ->
+                                selectedDate = Calendar.getInstance().apply {
+                                    set(year, month, day, current.get(Calendar.HOUR_OF_DAY), current.get(Calendar.MINUTE), current.get(Calendar.SECOND))
+                                }
+                            },
+                            current.get(Calendar.YEAR),
+                            current.get(Calendar.MONTH),
+                            current.get(Calendar.DAY_OF_MONTH)
+                        ).show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Date: " + dateFormat.format(selectedDate.time))
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                val cleanAmount = amount.toDoubleOrNull()
+                val cleanMerchant = merchant.trim()
+                if (cleanAmount != null && cleanAmount > 0 && cleanMerchant.isNotBlank()) {
+                    onSave(cleanAmount, type, cleanMerchant, selectedDate.timeInMillis)
+                }
+            }) { Text("Save") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
 private fun BankDialog(
     current: String,
     onDismiss: () -> Unit,
@@ -901,6 +986,7 @@ private fun TransactionRow(
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
+    onEditTransaction: (Transaction, Double, TransactionType, String, Long) -> Unit,
     onAddCategory: (String) -> Unit
 ) {
     var categoryMenuExpanded by remember { mutableStateOf(false) }
@@ -909,6 +995,7 @@ private fun TransactionRow(
     var addCategoryExpanded by remember { mutableStateOf(false) }
     var bankDialog by remember { mutableStateOf(false) }
     var deleteDialog by remember { mutableStateOf(false) }
+    var editDialog by remember { mutableStateOf(false) }
     var selectedCategory by remember(transaction.category) { mutableStateOf(transaction.category) }
     var newCategory by remember { mutableStateOf("") }
 
@@ -988,6 +1075,13 @@ private fun TransactionRow(
                             onDismissRequest = { editMenuExpanded = false }
                         ) {
                             DropdownMenuItem(
+                                text = { Text("Edit transaction") },
+                                onClick = {
+                                    editMenuExpanded = false
+                                    editDialog = true
+                                }
+                            )
+                            DropdownMenuItem(
                                 text = { Text("Change account") },
                                 onClick = {
                                     editMenuExpanded = false
@@ -1006,6 +1100,17 @@ private fun TransactionRow(
                 }
             }
         }
+    }
+
+    if (editDialog) {
+        EditTransactionDialog(
+            transaction = transaction,
+            onDismiss = { editDialog = false },
+            onSave = { amount, type, merchant, timestamp ->
+                editDialog = false
+                onEditTransaction(transaction, amount, type, merchant, timestamp)
+            }
+        )
     }
 
     if (bankDialog) {
