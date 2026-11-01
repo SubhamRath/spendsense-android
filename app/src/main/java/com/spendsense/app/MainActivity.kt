@@ -162,7 +162,7 @@ private fun SpendSenseApp(
         }
     ) { padding ->
         when (page) {
-            0 -> HomePage(transactions, categories, onScan, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory, Modifier.padding(padding))
+            0 -> HomePage(transactions, categories, onScan, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory, Modifier.padding(padding))
             1 -> ActivityPage(transactions, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory, onAddTransaction, Modifier.padding(padding))
             else -> GraphsPage(transactions, Modifier.padding(padding))
         }
@@ -600,6 +600,7 @@ private fun HomePage(
     onChangeCategory: (Transaction, String, Boolean) -> Unit,
     onChangeBank: (Transaction, String) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
+    onEditTransaction: (Transaction, Double, TransactionType, String, Long) -> Unit,
     onAddCategory: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -655,7 +656,7 @@ private fun HomePage(
             if (selectedTransactions.isEmpty()) Text("No transactions on this date.")
             else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 selectedTransactions.forEach { transaction ->
-                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory)
+                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
                 }
             }
         }
