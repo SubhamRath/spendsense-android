@@ -378,11 +378,14 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
                 c.get(Calendar.DAY_OF_YEAR) == day.get(Calendar.DAY_OF_YEAR)
         }.sumOf { it.amount }
     }
-    val byCategory = spending
+    val rawByCategory = spending
         .groupBy { it.category }
         .mapValues { (_, values) -> values.sumOf { it.amount } }
         .toList()
         .sortedByDescending { it.second }
+    val topCategories = rawByCategory.take(5)
+    val otherTotal = rawByCategory.drop(5).sumOf { it.second }
+    val byCategory = topCategories + if (otherTotal > 0) listOf("Other" to otherTotal) else emptyList()
     val totalSpent = spending.sumOf { it.amount }
 
     Column(
@@ -405,7 +408,7 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
         Spacer(Modifier.height(14.dp))
         SpendingBarChart(days, daily, spending)
         Spacer(Modifier.height(12.dp))
-        CategoryBreakdown(byCategory, totalSpent, spending)
+        CategoryPieChart(byCategory, totalSpent, spending)
     }
 }
 
@@ -562,6 +565,97 @@ private fun SpendingBarChart(
                 }
             },
             confirmButton = { TextButton(onClick = { selectedDay = null }) { Text("Close") } }
+        )
+    }
+}
+
+@Composable
+private fun CategoryPieChart(
+    categories: List<Pair<String, Double>>,
+    total: Double,
+    spending: List<Transaction>
+) {
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+    val slices = categories.filter { it.second > 0 }
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Spending by category", style = MaterialTheme.typography.titleMedium)
+            Text(compactAmount(total) + " total", style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(12.dp))
+            if (slices.isEmpty()) {
+                Text("No spending data for this period.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            } else {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Canvas(Modifier.size(150.dp)) {
+                        var startAngle = -90f
+                        slices.forEachIndexed { index, (_, amount) ->
+                            val sweep = (amount / total * 360.0).toFloat()
+                            drawArc(
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = (1f - index * 0.12f).coerceAtLeast(0.35f)),
+                                startAngle = startAngle,
+                                sweepAngle = sweep,
+                                useCenter = true
+                            )
+                            startAngle += sweep
+                        }
+                    }
+                    Spacer(Modifier.width(14.dp))
+                    Column(Modifier.weight(1f)) {
+                        slices.forEachIndexed { index, (name, amount) ->
+                            Row(
+                                Modifier.fillMaxWidth().clickable { selectedCategory = name }.padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(Modifier.size(10.dp).background(
+                                    MaterialTheme.colorScheme.primary.copy(alpha = (1f - index * 0.12f).coerceAtLeast(0.35f)),
+                                    MaterialTheme.shapes.small
+                                ))
+                                Spacer(Modifier.width(8.dp))
+                                Text(name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(compactAmount(amount), style = MaterialTheme.typography.labelMedium)
+                            }
+                        }
+                    }
+                }
+                Spacer(Modifier.height(6.dp))
+                Text("Tap a category for transaction details", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
+
+    selectedCategory?.let { category ->
+        val txns = if (category == "Other") {
+            spending.filter { it.category !in categories.take(5).map { pair -> pair.first } }
+        } else {
+            spending.filter { it.category == category }
+        }.sortedByDescending { it.timestamp }
+        AlertDialog(
+            onDismissRequest = { selectedCategory = null },
+            title = { Text(category) },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    Text("Total " + compactAmount(txns.sumOf { it.amount }), style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(8.dp))
+                    txns.forEach { tx ->
+                        Row(Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween) {
+                            Column(Modifier.weight(1f)) {
+                                Text(tx.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(tx.category + " • " + SimpleDateFormat("dd MMM · h:mm a", Locale.getDefault()).format(Date(tx.timestamp)),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(currencyFormat(tx.amount), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedCategory = null }) { Text("Close") } }
         )
     }
 }
