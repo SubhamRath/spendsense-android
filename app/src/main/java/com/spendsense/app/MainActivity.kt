@@ -856,73 +856,151 @@ private fun CategoryTargetDialog(
 
 @Composable
 private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
-    var range by remember { mutableStateOf(7) }
+    var period by remember { mutableStateOf("MONTH") }
+    var anchor by remember {
+        mutableStateOf(Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 12)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        })
+    }
     var editingRecurring by remember { mutableStateOf<RecurringCandidate?>(null) }
     var recurringCandidates by remember(transactions) { mutableStateOf(findRecurringCandidates(transactions)) }
-    val now = Calendar.getInstance()
+
     val start = Calendar.getInstance().apply {
-        timeInMillis = now.timeInMillis
-        add(Calendar.DAY_OF_YEAR, -(range - 1))
-        set(Calendar.HOUR_OF_DAY, 0)
-        set(Calendar.MINUTE, 0)
-        set(Calendar.SECOND, 0)
-        set(Calendar.MILLISECOND, 0)
-    }
-    val spending = transactions.filter {
-        it.type == TransactionType.DEBIT &&
-            it.category != "Transfers" &&
-            it.category != "Investments" &&
-            it.timestamp >= start.timeInMillis
-    }
-    val days = (0 until range).map { offset ->
-        Calendar.getInstance().apply {
-            timeInMillis = start.timeInMillis
-            add(Calendar.DAY_OF_YEAR, offset)
+        timeInMillis = anchor.timeInMillis
+        when (period) {
+            "WEEK" -> {
+                set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            "MONTH" -> {
+                set(Calendar.DAY_OF_MONTH, 1)
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
+            else -> {
+                set(Calendar.DAY_OF_YEAR, 1)
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            }
         }
     }
-    val daily = days.map { day ->
-        spending.filter {
-            val c = Calendar.getInstance().apply { timeInMillis = it.timestamp }
-            c.get(Calendar.YEAR) == day.get(Calendar.YEAR) &&
-                c.get(Calendar.DAY_OF_YEAR) == day.get(Calendar.DAY_OF_YEAR)
-        }.sumOf { it.amount }
+    val end = Calendar.getInstance().apply {
+        timeInMillis = start.timeInMillis
+        when (period) {
+            "WEEK" -> add(Calendar.DAY_OF_YEAR, 7)
+            "MONTH" -> add(Calendar.MONTH, 1)
+            else -> add(Calendar.YEAR, 1)
+        }
     }
-    val rawByCategory = spending
-        .groupBy { it.category }
+    val periodTransactions = transactions.filter { it.timestamp >= start.timeInMillis && it.timestamp < end.timeInMillis }
+    val spending = periodTransactions.filter {
+        it.type == TransactionType.DEBIT && it.category != "Transfers" && it.category != "Investments"
+    }
+    val totalSpent = spending.sumOf { it.amount }
+    val income = periodTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
+    val invested = periodTransactions.filter {
+        it.type == TransactionType.DEBIT && it.category == "Investments"
+    }.sumOf { it.amount }
+
+    val rawByCategory = spending.groupBy { it.category }
         .mapValues { (_, values) -> values.sumOf { it.amount } }
-        .toList()
-        .sortedByDescending { it.second }
+        .toList().sortedByDescending { it.second }
     val topCategories = rawByCategory.take(5)
     val otherTotal = rawByCategory.drop(5).sumOf { it.second }
     val byCategory = topCategories + if (otherTotal > 0) listOf("Other" to otherTotal) else emptyList()
-    val totalSpent = spending.sumOf { it.amount }
-    val income = transactions.filter { it.type == TransactionType.CREDIT && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
-    val invested = transactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" && it.timestamp >= start.timeInMillis }.sumOf { it.amount }
+
+    fun move(direction: Int) {
+        anchor = Calendar.getInstance().apply {
+            timeInMillis = anchor.timeInMillis
+            when (period) {
+                "WEEK" -> add(Calendar.WEEK_OF_YEAR, direction)
+                "MONTH" -> add(Calendar.MONTH, direction)
+                else -> add(Calendar.YEAR, direction)
+            }
+        }
+    }
+
+    val periodLabel = when (period) {
+        "WEEK" -> {
+            val weekEnd = Calendar.getInstance().apply { timeInMillis = start.timeInMillis; add(Calendar.DAY_OF_YEAR, 6) }
+            SimpleDateFormat("dd MMM", Locale.getDefault()).format(start.time) + " – " +
+                SimpleDateFormat("dd MMM yyyy", Locale.getDefault()).format(weekEnd.time)
+        }
+        "MONTH" -> SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(start.time)
+        else -> start.get(Calendar.YEAR).toString()
+    }
 
     Column(
-        modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Text("Insights", style = MaterialTheme.typography.headlineMedium)
         Text(
-            if (range == 7) "Your spending over the last 7 days" else "Your spending over the last 30 days",
+            "Explore your spending by week, month and year",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(range == 7, { range = 7 }, label = { Text("7 days") })
-            FilterChip(range == 30, { range = 30 }, label = { Text("30 days") })
+        Spacer(Modifier.height(12.dp))
+
+        Row(
+            Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            FilterChip(period == "WEEK", { period = "WEEK"; anchor = Calendar.getInstance() }, label = { Text("Week") })
+            FilterChip(period == "MONTH", { period = "MONTH"; anchor = Calendar.getInstance() }, label = { Text("Month") })
+            FilterChip(period == "YEAR", { period = "YEAR"; anchor = Calendar.getInstance() }, label = { Text("Year") })
         }
+
+        Spacer(Modifier.height(8.dp))
+        Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 6.dp, vertical = 5.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = { move(-1) }) { Text("‹", fontSize = 30.sp) }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        when (period) {
+                            "WEEK" -> "Selected week"
+                            "MONTH" -> "Selected month"
+                            else -> "Selected year"
+                        },
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(periodLabel, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                }
+                IconButton(onClick = { move(1) }) { Text("›", fontSize = 30.sp) }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetricCard("Earned", currencyFormat(income), Modifier.weight(1f))
-            MetricCard("Spent", currencyFormat(totalSpent), Modifier.weight(1f))
-            MetricCard("Invested", currencyFormat(invested), Modifier.weight(1f))
+            MetricCard("Earned", currencyFormat(income), Modifier.weight(1f), Color(0xFF43A047), "↑")
+            MetricCard("Spent", currencyFormat(totalSpent), Modifier.weight(1f), Color(0xFFFF7043), "↓")
+            MetricCard("Invested", currencyFormat(invested), Modifier.weight(1f), Color(0xFF8E44AD), "↗")
         }
+
         Spacer(Modifier.height(14.dp))
-        SpendingBarChart(days, daily, spending)
+        if (period == "YEAR") {
+            YearlyMonthlyBarChart(start.get(Calendar.YEAR), transactions)
+        } else {
+            val days = (0 until if (period == "WEEK") 7 else start.getActualMaximum(Calendar.DAY_OF_MONTH)).map { offset ->
+                Calendar.getInstance().apply {
+                    timeInMillis = start.timeInMillis
+                    add(Calendar.DAY_OF_YEAR, offset)
+                }
+            }
+            val daily = days.map { day ->
+                spending.filter {
+                    val c = Calendar.getInstance().apply { timeInMillis = it.timestamp }
+                    c.get(Calendar.YEAR) == day.get(Calendar.YEAR) && c.get(Calendar.DAY_OF_YEAR) == day.get(Calendar.DAY_OF_YEAR)
+                }.sumOf { it.amount }
+            }
+            SpendingBarChart(days, daily, spending)
+        }
+
         Spacer(Modifier.height(12.dp))
         CategoryPieChart(byCategory, totalSpent, spending)
 
@@ -934,63 +1012,29 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(Modifier.height(8.dp))
-
         if (recurringCandidates.isEmpty()) {
             Card(Modifier.fillMaxWidth()) {
-                Text(
-                    "No recurring payments detected yet.",
-                    modifier = Modifier.padding(16.dp),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Text("No recurring payments detected yet.", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         } else {
             recurringCandidates.forEach { candidate ->
                 val accent = recurringAccent(candidate.category)
                 Card(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = accent.copy(alpha = 0.14f)
-                    )
+                    Modifier.fillMaxWidth().padding(vertical = 5.dp),
+                    colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.14f))
                 ) {
-                    Row(
-                        Modifier.fillMaxWidth().padding(14.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(Modifier.fillMaxWidth().padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
                         Box(
-                            Modifier.size(42.dp).background(
-                                accent.copy(alpha = 0.22f),
-                                MaterialTheme.shapes.medium
-                            ),
+                            Modifier.size(42.dp).background(accent.copy(alpha = 0.22f), MaterialTheme.shapes.medium),
                             contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                "↻",
-                                fontSize = 23.sp,
-                                color = accent
-                            )
-                        }
+                        ) { Text("↻", fontSize = 23.sp, color = accent) }
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
-                            Text(
-                                candidate.merchant,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                candidate.category + " • " + candidate.count + " payments",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                currencyFormat(candidate.averageAmount) + " / month",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = accent
-                            )
+                            Text(candidate.merchant, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(candidate.category + " • " + candidate.count + " payments", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(currencyFormat(candidate.averageAmount) + " / month", style = MaterialTheme.typography.titleSmall, color = accent)
                         }
-                        TextButton(onClick = { editingRecurring = candidate }) {
-                            Text("Edit", color = accent)
-                        }
+                        TextButton(onClick = { editingRecurring = candidate }) { Text("Edit", color = accent) }
                     }
                 }
             }
@@ -1002,9 +1046,7 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
             candidate = candidate,
             categories = (transactions.map { it.category } + listOf("Bills", "Subscriptions", "Insurance", "Investments", "Other")).distinct().sorted(),
             onUpdate = { updated ->
-                recurringCandidates = recurringCandidates.map {
-                    if (it.merchant == candidate.merchant) updated else it
-                }
+                recurringCandidates = recurringCandidates.map { if (it.merchant == candidate.merchant) updated else it }
                 editingRecurring = null
             },
             onDelete = {
@@ -1013,6 +1055,85 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
             },
             onDismiss = { editingRecurring = null }
         )
+    }
+}
+
+@Composable
+private fun YearlyMonthlyBarChart(year: Int, transactions: List<Transaction>) {
+    val months = (0 until 12).map { month ->
+        Calendar.getInstance().apply { set(year, month, 1, 12, 0, 0); set(Calendar.MILLISECOND, 0) }
+    }
+    val values = months.map { month ->
+        val monthStart = Calendar.getInstance().apply {
+            set(year, month.get(Calendar.MONTH), 1, 0, 0, 0); set(Calendar.MILLISECOND, 0)
+        }
+        val monthEnd = Calendar.getInstance().apply { timeInMillis = monthStart.timeInMillis; add(Calendar.MONTH, 1) }
+        transactions.filter {
+            it.type == TransactionType.DEBIT &&
+                it.category != "Transfers" &&
+                it.category != "Investments" &&
+                it.timestamp >= monthStart.timeInMillis &&
+                it.timestamp < monthEnd.timeInMillis
+        }.sumOf { it.amount }
+    }
+    val maxValue = maxOf(1.0, values.maxOrNull() ?: 1.0)
+    val chartMax = when {
+        maxValue <= 1000.0 -> 1000.0
+        maxValue <= 5000.0 -> 5000.0
+        maxValue <= 10000.0 -> 10000.0
+        maxValue <= 25000.0 -> 25000.0
+        maxValue <= 50000.0 -> 50000.0
+        maxValue <= 100000.0 -> 100000.0
+        maxValue <= 250000.0 -> 250000.0
+        else -> kotlin.math.ceil(maxValue / 100000.0) * 100000.0
+    }
+
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Monthly spending", style = MaterialTheme.typography.titleMedium)
+            Text("All 12 months of $year", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(12.dp))
+            Row(Modifier.fillMaxWidth().height(220.dp)) {
+                Column(
+                    Modifier.width(44.dp).fillMaxHeight(),
+                    verticalArrangement = Arrangement.SpaceBetween,
+                    horizontalAlignment = Alignment.End
+                ) {
+                    listOf(chartMax, chartMax * .75, chartMax * .5, chartMax * .25, 0.0).forEach {
+                        Text(compactAmount(it), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Row(
+                    Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    months.indices.forEach { i ->
+                        Column(
+                            Modifier.width(48.dp).fillMaxHeight(),
+                            verticalArrangement = Arrangement.Bottom,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            if (values[i] > 0) {
+                                Text(compactAmount(values[i]), style = MaterialTheme.typography.labelSmall, maxLines = 1, softWrap = false)
+                                Spacer(Modifier.height(4.dp))
+                            } else {
+                                Spacer(Modifier.height(18.dp))
+                            }
+                            Box(
+                                Modifier.fillMaxWidth(.72f)
+                                    .height((150f * (values[i] / chartMax).toFloat()).coerceAtLeast(if (values[i] > 0) 3f else 0f).dp)
+                                    .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
+                            )
+                            Spacer(Modifier.height(8.dp))
+                            Text(SimpleDateFormat("MMM", Locale.getDefault()).format(months[i].time), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+            }
+            Text("12-month view • use ‹ › above to change year", Modifier.fillMaxWidth().padding(top = 8.dp), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
