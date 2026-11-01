@@ -149,7 +149,15 @@ private fun SpendSenseApp(
                 NavigationBarItem(
                     page == 1,
                     { page = 1 },
-                    icon = { Text("↕", fontSize = 26.sp) },
+                    icon = {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy((-3).dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text("↑", fontSize = 18.sp)
+                            Text("↓", fontSize = 18.sp)
+                        }
+                    },
                     label = { Text("Activity") }
                 )
                 NavigationBarItem(
