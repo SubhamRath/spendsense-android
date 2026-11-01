@@ -71,6 +71,34 @@ class TransactionRepository private constructor(context: Context) {
         transactions.updateCategory(smsId, category)
     }
 
+    suspend fun setBank(smsId: Long, bank: String) {
+        transactions.updateBank(smsId, bank.trim().ifBlank { "Cash" })
+    }
+
+    suspend fun addManualTransaction(
+        amount: Double,
+        type: TransactionType,
+        merchant: String,
+        category: String,
+        bank: String,
+        timestamp: Long
+    ) {
+        val id = -System.currentTimeMillis()
+        transactions.upsertAll(listOf(Transaction(
+            id = id,
+            amount = amount,
+            type = type,
+            merchant = merchant.trim().ifBlank { "Manual transaction" },
+            category = category,
+            sender = bank.trim().ifBlank { "Cash" },
+            timestamp = timestamp,
+            rawMessage = "Manual transaction",
+            transactionRef = null,
+            dedupeKey = "manual:$id",
+            confidence = 100
+        ).toEntity()))
+    }
+
     suspend fun setCategoryForMerchant(merchant: String, category: String) {
         val cleanMerchant = merchant.trim()
         if (cleanMerchant.isBlank() || cleanMerchant.equals("Unknown", ignoreCase = true)) return
