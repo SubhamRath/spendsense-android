@@ -25,6 +25,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import java.util.Calendar
+import java.util.Date
 import androidx.core.content.ContextCompat
 import com.spendsense.app.data.Transaction
 import com.spendsense.app.data.TransactionType
@@ -129,9 +130,7 @@ private fun SpendSenseApp(
     var page by remember { mutableStateOf(0) }
     Scaffold(
         bottomBar = {
-            NavigationBar(
-                modifier = Modifier.height(88.dp)
-            ) {
+            NavigationBar {
                 NavigationBarItem(
                     page == 0,
                     { page = 0 },
@@ -288,7 +287,10 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
     val start = Calendar.getInstance().apply {
         timeInMillis = now.timeInMillis
         add(Calendar.DAY_OF_YEAR, -(range - 1))
-        set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
     }
     val spending = transactions.filter {
         it.type == TransactionType.DEBIT &&
@@ -296,35 +298,47 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
             it.category != "Investments" &&
             it.timestamp >= start.timeInMillis
     }
-    val days = (0 until range).map { offset -> Calendar.getInstance().apply { timeInMillis = start.timeInMillis; add(Calendar.DAY_OF_YEAR, offset) } }
+    val days = (0 until range).map { offset ->
+        Calendar.getInstance().apply {
+            timeInMillis = start.timeInMillis
+            add(Calendar.DAY_OF_YEAR, offset)
+        }
+    }
     val daily = days.map { day ->
         spending.filter {
             val c = Calendar.getInstance().apply { timeInMillis = it.timestamp }
-            c.get(Calendar.YEAR) == day.get(Calendar.YEAR) && c.get(Calendar.DAY_OF_YEAR) == day.get(Calendar.DAY_OF_YEAR)
+            c.get(Calendar.YEAR) == day.get(Calendar.YEAR) &&
+                c.get(Calendar.DAY_OF_YEAR) == day.get(Calendar.DAY_OF_YEAR)
         }.sumOf { it.amount }
     }
-    val rawByCategory = spending
+    val byCategory = spending
         .groupBy { it.category }
-        .mapValues { it.value.sumOf { t -> t.amount } }
-        .entries
-        .sortedByDescending { it.value }
-    val topCategories = rawByCategory.take(5)
-    val otherTotal = rawByCategory.drop(5).sumOf { it.value }
-    val byCategory: List<Pair<String, Double>> = buildList {
-        addAll(topCategories.map { it.key to it.value })
-        if (otherTotal > 0) add("Other" to otherTotal)
-    }
-    Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Text("Graphs", style = MaterialTheme.typography.headlineMedium)
-        Spacer(Modifier.height(8.dp))
+        .mapValues { (_, values) -> values.sumOf { it.amount } }
+        .toList()
+        .sortedByDescending { it.second }
+    val totalSpent = spending.sumOf { it.amount }
+
+    Column(
+        modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Text("Insights", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            if (range == 7) "Your spending over the last 7 days" else "Your spending over the last 30 days",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(range == 7, { range = 7 }, label = { Text("Week") })
+            FilterChip(range == 7, { range = 7 }, label = { Text("7 days") })
             FilterChip(range == 30, { range = 30 }, label = { Text("30 days") })
         }
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(14.dp))
         SpendingBarChart(days, daily)
-        Spacer(Modifier.height(16.dp))
-        CategoryPieChart(byCategory)
+        Spacer(Modifier.height(12.dp))
+        CategoryBreakdown(byCategory, totalSpent)
     }
 }
 
@@ -332,18 +346,49 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
 private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
     val barColor = MaterialTheme.colorScheme.primary
     val maxValue = maxOf(1.0, values.maxOrNull() ?: 1.0)
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Text("Spending", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(10.dp))
-            Row(Modifier.fillMaxWidth().height(220.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.Bottom) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Daily spending", style = MaterialTheme.typography.titleMedium)
+                Text("Peak " + compactAmount(maxValue), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth().height(190.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.Bottom
+            ) {
                 days.forEachIndexed { i, day ->
-                    Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Bottom, horizontalAlignment = Alignment.CenterHorizontally) {
-                        if (values[i] > 0) Text(compactAmount(values[i]), style = MaterialTheme.typography.labelSmall, maxLines = 1)
-                        Spacer(Modifier.height(3.dp))
-                        Box(Modifier.fillMaxWidth().fillMaxHeight((values[i] / maxValue).toFloat().coerceAtLeast(0.02f)).background(barColor))
-                        Spacer(Modifier.height(4.dp))
-                        Text(SimpleDateFormat("EEE", Locale.getDefault()).format(day.time).take(1), style = MaterialTheme.typography.labelSmall)
+                    Column(
+                        Modifier.weight(1f).fillMaxHeight(),
+                        verticalArrangement = Arrangement.Bottom,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (values[i] > 0) {
+                            Text(compactAmount(values[i]), style = MaterialTheme.typography.labelSmall, maxLines = 1)
+                            Spacer(Modifier.height(3.dp))
+                        } else {
+                            Spacer(Modifier.height(14.dp))
+                        }
+                        Box(
+                            Modifier
+                                .fillMaxWidth()
+                                .fillMaxHeight((values[i] / maxValue).toFloat().coerceAtLeast(if (values[i] > 0) 0.025f else 0f))
+                                .background(barColor, MaterialTheme.shapes.small)
+                        )
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            SimpleDateFormat("EEE", Locale.getDefault()).format(day.time).take(1),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -352,37 +397,41 @@ private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
 }
 
 @Composable
-private fun CategoryPieChart(categories: List<Pair<String, Double>>) {
-    val total = categories.sumOf { it.second }
-    val pieColor = MaterialTheme.colorScheme.primary
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
-            Text("Spending by category", style = MaterialTheme.typography.titleMedium)
-            if (total <= 0) {
-                Spacer(Modifier.height(10.dp))
-                Text("No spending data for the selected period.")
+private fun CategoryBreakdown(categories: List<Pair<String, Double>>, total: Double) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("By category", style = MaterialTheme.typography.titleMedium)
+                Text(compactAmount(total), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Spacer(Modifier.height(12.dp))
+            if (categories.isEmpty()) {
+                Text("No spending data for this period.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
-                Spacer(Modifier.height(10.dp))
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Canvas(Modifier.size(180.dp)) {
-                        var startAngle = -90f
-                        categories.take(6).forEachIndexed { index, entry ->
-                            val sweep = (entry.second / total * 360.0).toFloat()
-                            drawArc(
-                                color = pieColor.copy(alpha = 0.25f + index * 0.11f),
-                                startAngle = startAngle,
-                                sweepAngle = sweep,
-                                useCenter = true
+                categories.take(6).forEach { (name, amount) ->
+                    val fraction = if (total > 0) (amount / total).toFloat() else 0f
+                    Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                            Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(compactAmount(amount), style = MaterialTheme.typography.bodyMedium)
+                        }
+                        Spacer(Modifier.height(5.dp))
+                        Box(
+                            Modifier.fillMaxWidth().height(7.dp)
+                                .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
+                        ) {
+                            Box(
+                                Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight()
+                                    .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
                             )
-                            startAngle += sweep
                         }
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        categories.take(6).forEach { entry ->
-                            Text(entry.first + ": " + compactAmount(entry.second), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }
-                        if (categories.size > 6) Text("+" + (categories.size - 6) + " more")
                     }
                 }
             }
@@ -432,12 +481,19 @@ private fun HomePage(
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("Earned", currency.format(monthIncome), Modifier.weight(1f))
-            MetricCard("Spent", currency.format(monthExpenses), Modifier.weight(1f))
+            MetricCard("Spent", currency.format(monthExpenses - monthInvested), Modifier.weight(1f))
             MetricCard("Invested", currency.format(monthInvested), Modifier.weight(1f))
         }
-        Spacer(Modifier.height(10.dp))
-        MetricCard("Net cash flow", currency.format(monthIncome - monthExpenses), Modifier.fillMaxWidth())
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(8.dp))
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Net cash flow", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(currency.format(monthIncome - monthExpenses), style = MaterialTheme.typography.titleMedium)
+        }
+        Spacer(Modifier.height(12.dp))
         CalendarView(displayedYear, displayedMonth, monthTransactions, selectedDay) { selectedDay = it }
         selectedDay?.let { day ->
             Spacer(Modifier.height(14.dp))
@@ -477,7 +533,7 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                 Row(Modifier.fillMaxWidth()) {
                     for (col in 0..6) {
                         val day = row * 7 + col - leading + 1
-                        if (day < 1 || day > daysInMonth) Spacer(Modifier.weight(1f).height(48.dp))
+                        if (day < 1 || day > daysInMonth) Spacer(Modifier.weight(1f).height(44.dp))
                         else {
                             val dayTransactions = byDay[day].orEmpty()
                             val income = dayTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
@@ -498,7 +554,7 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                                 colors = CardDefaults.cardColors(containerColor = cellColor)
                             ) {
                                 Column(
-                                    Modifier.fillMaxWidth().height(44.dp).padding(4.dp),
+                                    Modifier.fillMaxWidth().height(40.dp).padding(4.dp),
                                     verticalArrangement = Arrangement.spacedBy(1.dp)
                                 ) {
                                     Text(day.toString(), style = MaterialTheme.typography.labelLarge)
@@ -606,10 +662,10 @@ private fun bankInitials(name: String): String = when {
 @Composable
 private fun MetricCard(title: String, value: String, modifier: Modifier) {
     Card(modifier) {
-        Column(Modifier.padding(16.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(6.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium)
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 11.dp)) {
+            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Spacer(Modifier.height(4.dp))
+            Text(value, style = MaterialTheme.typography.titleSmall)
         }
     }
 }
@@ -632,48 +688,48 @@ private fun TransactionRow(
     var selectedCategory by remember(transaction.category) { mutableStateOf(transaction.category) }
     var newCategory by remember { mutableStateOf("") }
 
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
         Row(
-            Modifier.fillMaxWidth().padding(12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 11.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            BankBadge(
-                transaction.sender,
-                Modifier.size(44.dp),
-                onClick = { bankDialog = true }
-            )
-            Spacer(Modifier.width(10.dp))
+            BankBadge(transaction.sender, Modifier.size(42.dp)) { bankDialog = true }
+            Spacer(Modifier.width(11.dp))
             Column(Modifier.weight(1f)) {
-                Text(
-                    transaction.merchant,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Text(transaction.merchant, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
                 Text(
                     transaction.category + " • " + bankDisplayName(transaction.sender),
-                    style = MaterialTheme.typography.labelMedium,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    (if (transaction.type == TransactionType.CREDIT) "+ " else "- ") +
-                        currency.format(transaction.amount)
+                    SimpleDateFormat("dd MMM · h:mm a", Locale.getDefault()).format(Date(transaction.timestamp)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = { menuExpanded = true }) {
-                Text("Category")
-            }
-            TextButton(onClick = { deleteDialog = true }) {
-                Text("Delete", color = MaterialTheme.colorScheme.error)
+            Spacer(Modifier.width(8.dp))
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    (if (transaction.type == TransactionType.CREDIT) "+ " else "− ") + currency.format(transaction.amount),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (transaction.type == TransactionType.CREDIT) Color(0xFF8FE3AE) else MaterialTheme.colorScheme.onSurface
+                )
+                TextButton(
+                    onClick = { menuExpanded = true },
+                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                ) { Text("Edit", fontSize = 12.sp) }
             }
         }
     }
 
-    DropdownMenu(
-        expanded = menuExpanded,
-        onDismissRequest = { menuExpanded = false }
-    ) {
+    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
         categories.forEach { category ->
             DropdownMenuItem(
                 text = { Text(category) },
@@ -684,13 +740,9 @@ private fun TransactionRow(
                 }
             )
         }
-        DropdownMenuItem(
-            text = { Text("+ Add new category") },
-            onClick = {
-                menuExpanded = false
-                addCategoryExpanded = true
-            }
-        )
+        DropdownMenuItem(text = { Text("Change account") }, onClick = { menuExpanded = false; bankDialog = true })
+        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { menuExpanded = false; deleteDialog = true })
+        DropdownMenuItem(text = { Text("+ Add new category") }, onClick = { menuExpanded = false; addCategoryExpanded = true })
     }
 
     if (deleteDialog) {
@@ -702,46 +754,27 @@ private fun TransactionRow(
                 TextButton(onClick = {
                     onDeleteTransaction(transaction)
                     deleteDialog = false
-                }) {
-                    Text("Delete", color = MaterialTheme.colorScheme.error)
-                }
+                }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = {
-                TextButton(onClick = { deleteDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            dismissButton = { TextButton(onClick = { deleteDialog = false }) { Text("Cancel") } }
         )
     }
 
     if (bankDialog) {
-        var bankName by remember(transaction.sender) {
-            mutableStateOf(bankDisplayName(transaction.sender))
-        }
+        var bankName by remember(transaction.sender) { mutableStateOf(bankDisplayName(transaction.sender)) }
         AlertDialog(
             onDismissRequest = { bankDialog = false },
             title = { Text("Edit account") },
             text = {
-                OutlinedTextField(
-                    value = bankName,
-                    onValueChange = { bankName = it },
-                    label = { Text("Bank / Cash") },
-                    singleLine = true
-                )
+                OutlinedTextField(value = bankName, onValueChange = { bankName = it }, label = { Text("Bank / Cash") }, singleLine = true)
             },
             confirmButton = {
                 TextButton(onClick = {
                     onChangeBank(transaction, bankName.trim().ifBlank { "Cash" })
                     bankDialog = false
-                }) {
-                    Text("Save")
-                }
+                }) { Text("Save") }
             },
-            dismissButton = {
-                TextButton(onClick = { bankDialog = false }) {
-                    Text("Cancel")
-                }
-            }
+            dismissButton = { TextButton(onClick = { bankDialog = false }) { Text("Cancel") } }
         )
     }
 
@@ -749,27 +782,18 @@ private fun TransactionRow(
         AlertDialog(
             onDismissRequest = { confirmExpanded = false },
             title = { Text("Change category") },
-            text = {
-                Text(
-                    "Apply $selectedCategory to future " +
-                        transaction.merchant + " transactions too?"
-                )
-            },
+            text = { Text("Apply $selectedCategory to future " + transaction.merchant + " transactions too?") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmExpanded = false
                     onChangeCategory(transaction, selectedCategory, true)
-                }) {
-                    Text("This & future")
-                }
+                }) { Text("This & future") }
             },
             dismissButton = {
                 TextButton(onClick = {
                     confirmExpanded = false
                     onChangeCategory(transaction, selectedCategory, false)
-                }) {
-                    Text("Only this")
-                }
+                }) { Text("Only this") }
             }
         )
     }
@@ -779,12 +803,7 @@ private fun TransactionRow(
             onDismissRequest = { addCategoryExpanded = false },
             title = { Text("New category") },
             text = {
-                OutlinedTextField(
-                    value = newCategory,
-                    onValueChange = { newCategory = it },
-                    label = { Text("Category name") },
-                    singleLine = true
-                )
+                OutlinedTextField(value = newCategory, onValueChange = { newCategory = it }, label = { Text("Category name") }, singleLine = true)
             },
             confirmButton = {
                 TextButton(onClick = {
@@ -796,15 +815,9 @@ private fun TransactionRow(
                         addCategoryExpanded = false
                         confirmExpanded = true
                     }
-                }) {
-                    Text("Add")
-                }
+                }) { Text("Add") }
             },
-            dismissButton = {
-                TextButton(onClick = { addCategoryExpanded = false }) {
-                    Text("Cancel")
-                }
-            }
+            dismissButton = { TextButton(onClick = { addCategoryExpanded = false }) { Text("Cancel") } }
         )
     }
 }
