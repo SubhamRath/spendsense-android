@@ -244,7 +244,12 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
         add(Calendar.DAY_OF_YEAR, -(range - 1))
         set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
     }
-    val spending = transactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" && it.timestamp >= start.timeInMillis }
+    val spending = transactions.filter {
+        it.type == TransactionType.DEBIT &&
+            it.category != "Transfers" &&
+            it.category != "Investments" &&
+            it.timestamp >= start.timeInMillis
+    }
     val days = (0 until range).map { offset -> Calendar.getInstance().apply { timeInMillis = start.timeInMillis; add(Calendar.DAY_OF_YEAR, offset) } }
     val daily = days.map { day ->
         spending.filter {
@@ -252,7 +257,17 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
             c.get(Calendar.YEAR) == day.get(Calendar.YEAR) && c.get(Calendar.DAY_OF_YEAR) == day.get(Calendar.DAY_OF_YEAR)
         }.sumOf { it.amount }
     }
-    val byCategory = spending.groupBy { it.category }.mapValues { it.value.sumOf { t -> t.amount } }.entries.sortedByDescending { it.value }
+    val rawByCategory = spending
+        .groupBy { it.category }
+        .mapValues { it.value.sumOf { t -> t.amount } }
+        .entries
+        .sortedByDescending { it.value }
+    val topCategories = rawByCategory.take(5)
+    val otherTotal = rawByCategory.drop(5).sumOf { it.value }
+    val byCategory = buildList {
+        addAll(topCategories)
+        if (otherTotal > 0) add("Other" to otherTotal)
+    }
     Column(modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Text("Graphs", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(8.dp))
@@ -299,7 +314,7 @@ private fun CategoryPieChart(categories: List<Map.Entry<String, Double>>) {
             Text("Spending by category", style = MaterialTheme.typography.titleMedium)
             if (total <= 0) {
                 Spacer(Modifier.height(10.dp))
-                Text("No spending data for the selected week.")
+                Text("No spending data for the selected period.")
             } else {
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
