@@ -1493,15 +1493,75 @@ private fun HomePage(
             Spacer(Modifier.height(14.dp))
             Text("Transactions on " + dayLabel(displayedYear, displayedMonth, day), style = MaterialTheme.typography.titleLarge)
             Spacer(Modifier.height(6.dp))
-            if (selectedTransactions.isEmpty()) Text("No transactions on this date.")
-            else Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                selectedTransactions.forEach { transaction ->
-                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
+            if (selectedTransactions.isEmpty()) {
+                Text("No transactions on this date.")
+            } else {
+                val spent = selectedTransactions
+                    .filter { it.type == TransactionType.DEBIT && it.category != "Investments" && it.category != "Transfers" }
+                    .sortedByDescending { it.timestamp }
+                val earned = selectedTransactions
+                    .filter { it.type == TransactionType.CREDIT }
+                    .sortedByDescending { it.timestamp }
+                val invested = selectedTransactions
+                    .filter { it.type == TransactionType.DEBIT && it.category == "Investments" }
+                    .sortedByDescending { it.timestamp }
+
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    if (spent.isNotEmpty()) {
+                        TransactionSectionHeader("💸 Spent", spent.size, Color(0xFFFF7043))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            spent.forEach { transaction ->
+                                TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
+                            }
+                        }
+                    }
+
+                    if (earned.isNotEmpty()) {
+                        TransactionSectionHeader("💰 Earned", earned.size, Color(0xFF43A047))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            earned.forEach { transaction ->
+                                TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
+                            }
+                        }
+                    }
+
+                    if (invested.isNotEmpty()) {
+                        TransactionSectionHeader("📈 Invested", invested.size, Color(0xFF8E44AD))
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            invested.forEach { transaction ->
+                                TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 
+}
+
+@Composable
+private fun TransactionSectionHeader(title: String, count: Int, accent: Color) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(accent.copy(alpha = 0.12f), MaterialTheme.shapes.medium)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = accent
+        )
+        Spacer(Modifier.weight(1f))
+        Text(
+            count.toString(),
+            style = MaterialTheme.typography.labelMedium,
+            color = accent
+        )
+    }
 }
 
 @Composable
