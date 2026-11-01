@@ -25,6 +25,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -1838,7 +1840,7 @@ private fun HomePage(
                             "💸 Spent",
                             spent.size,
                             Color(0xFFFF7043),
-                            Modifier.onGloballyPositioned { spendingSectionY = it.positionInParent().y }
+                            Modifier.onGloballyPositioned { spendingSectionY = it.positionInRoot().y }
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             spent.forEach { transaction ->
