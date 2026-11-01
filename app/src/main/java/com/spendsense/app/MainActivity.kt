@@ -728,16 +728,64 @@ private fun BankBadge(
     onClick: () -> Unit
 ) {
     val name = bankDisplayName(sender)
+    val (bg, fg) = bankBrandColors(name)
     Surface(
         onClick = onClick,
         modifier = modifier,
         shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceVariant
+        color = bg
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Text(if (name == "Cash") "₹" else bankInitials(name))
+            Text(
+                text = bankLogoMark(name),
+                color = fg,
+                style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold),
+                textAlign = TextAlign.Center
+            )
         }
     }
+}
+
+private fun bankLogoMark(name: String): String = when (name) {
+    "HDFC" -> "HDFC"
+    "ICICI" -> "ICICI"
+    "SBI" -> "SBI"
+    "Axis" -> "AXIS"
+    "IDFC FIRST" -> "IDFC"
+    "UCO" -> "UCO"
+    "Kotak" -> "K"
+    "Yes Bank" -> "YES"
+    "IndusInd" -> "II"
+    "PNB" -> "PNB"
+    "Bank of Baroda" -> "BOB"
+    "Canara" -> "C"
+    "Federal" -> "F"
+    "Paytm" -> "pay"
+    "PhonePe" -> "Pe"
+    "Google Pay" -> "G"
+    "Amazon Pay" -> "a"
+    else -> "₹"
+}
+
+private fun bankBrandColors(name: String): Pair<Color, Color> = when (name) {
+    "HDFC" -> Color(0xFF004C8F) to Color.White
+    "ICICI" -> Color(0xFFF58220) to Color.White
+    "SBI" -> Color(0xFF114DA5) to Color.White
+    "Axis" -> Color(0xFF7B1E4B) to Color.White
+    "IDFC FIRST" -> Color(0xFFB51E2A) to Color.White
+    "UCO" -> Color(0xFF0054A6) to Color.White
+    "Kotak" -> Color(0xFFE32B2B) to Color.White
+    "Yes Bank" -> Color(0xFF174A8B) to Color.White
+    "IndusInd" -> Color(0xFF7B1FA2) to Color.White
+    "PNB" -> Color(0xFFB5121B) to Color.White
+    "Bank of Baroda" -> Color(0xFFE87722) to Color.White
+    "Canara" -> Color(0xFF0072BC) to Color.White
+    "Federal" -> Color(0xFF0A4C97) to Color.White
+    "Paytm" -> Color(0xFF00AEEF) to Color.White
+    "PhonePe" -> Color(0xFF5F259F) to Color.White
+    "Google Pay" -> Color(0xFFFFFFFF) to Color(0xFF202124)
+    "Amazon Pay" -> Color(0xFFFFB300) to Color(0xFF111111)
+    else -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private fun bankDisplayName(sender: String): String {
@@ -765,14 +813,6 @@ private fun bankDisplayName(sender: String): String {
     }
 }
 
-private fun bankInitials(name: String): String = when {
-    name == "IDFC FIRST" -> "ID"
-    name == "Bank of Baroda" -> "BOB"
-    name == "IndusInd" -> "II"
-    name == "Yes Bank" -> "YES"
-    name.length <= 3 -> name
-    else -> name.take(3)
-}
 
 @Composable
 private fun MetricCard(title: String, value: String, modifier: Modifier) {
