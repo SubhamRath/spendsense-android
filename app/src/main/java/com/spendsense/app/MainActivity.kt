@@ -790,9 +790,8 @@ private fun CategoryTargetDialog(
     var allMonths by remember { mutableStateOf(false) }
     val monthKey = "category_target_" + year + "_" + month + "_" + selected
     val allKey = "category_target_all_" + selected
-    val current = monthlyOrAllTarget(prefs, "category_target", year, month, selected)
-
     LaunchedEffect(selected, year, month) {
+        val current = monthlyOrAllTarget(prefs, "category_target", year, month, selected)
         amount = if (current > 0) current.toString() else ""
         allMonths = prefs.getFloat(allKey, 0f) > 0 && prefs.getFloat(monthKey, 0f) == 0f
     }
@@ -845,6 +844,7 @@ private fun CategoryTargetDialog(
                             prefs.getStringSet("target_categories", emptySet()).orEmpty() + selected
                         )
                         .apply()
+                    onDismiss()
                     onDismiss()
                 }
             }) { Text("Save") }
