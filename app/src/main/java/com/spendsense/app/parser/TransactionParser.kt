@@ -60,6 +60,8 @@ object TransactionParser {
         val amount = extractAmount(body) ?: return null
 
         val type = when {
+            // Bank of Baroda and some other banks use "Dr. from A/C ... Cr. to <VPA>" for a debit.
+            Regex("""\bdr\.?\s+from\s+(?:a/c|acct|account)\b""", RegexOption.IGNORE_CASE).containsMatchIn(body) -> TransactionType.DEBIT
             debitWords.containsMatchIn(lower) && !isPureCreditMessage(lower) -> TransactionType.DEBIT
             creditWords.containsMatchIn(lower) -> TransactionType.CREDIT
             else -> return null
