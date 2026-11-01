@@ -870,7 +870,10 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
         context.getSharedPreferences("spendsense_recurring", android.content.Context.MODE_PRIVATE)
     }
     var editingRecurring by remember { mutableStateOf<RecurringCandidate?>(null) }
-    var recurringCandidates by remember(transactions) {
+    var autoScanRecurring by remember {
+        mutableStateOf(recurringPrefs.getBoolean("auto_scan", true))
+    }
+    var recurringCandidates by remember(transactions, autoScanRecurring) {
         mutableStateOf(
             findRecurringCandidates(transactions).mapNotNull { candidate ->
                 val key = recurringKey(candidate.merchant)
@@ -1025,12 +1028,57 @@ private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
         CategoryPieChart(byCategory, totalSpent, spending)
 
         Spacer(Modifier.height(18.dp))
-        Text("Recurring Payments", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Detected from repeated monthly transactions",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text("Recurring Payments", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    if (autoScanRecurring) "Auto-scans your transactions for repeated monthly payments"
+                    else "Scan manually when you want to check for recurring payments",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Switch(
+                checked = autoScanRecurring,
+                onCheckedChange = { enabled ->
+                    autoScanRecurring = enabled
+                    recurringPrefs.edit().putBoolean("auto_scan", enabled).apply()
+                    if (enabled) {
+                        recurringCandidates = findRecurringCandidates(transactions).mapNotNull { candidate ->
+                            val key = recurringKey(candidate.merchant)
+                            if (recurringPrefs.getBoolean("deleted_$key", false)) null
+                            else candidate.copy(
+                                merchant = recurringPrefs.getString("merchant_$key", candidate.merchant) ?: candidate.merchant,
+                                averageAmount = recurringPrefs.getString("amount_$key", null)?.toDoubleOrNull() ?: candidate.averageAmount,
+                                category = recurringPrefs.getString("category_$key", candidate.category) ?: candidate.category,
+                                dayOfMonth = recurringPrefs.getInt("day_$key", candidate.dayOfMonth)
+                            )
+                        }
+                    }
+                }
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        OutlinedButton(
+            onClick = {
+                recurringCandidates = findRecurringCandidates(transactions).mapNotNull { candidate ->
+                    val key = recurringKey(candidate.merchant)
+                    if (recurringPrefs.getBoolean("deleted_$key", false)) null
+                    else candidate.copy(
+                        merchant = recurringPrefs.getString("merchant_$key", candidate.merchant) ?: candidate.merchant,
+                        averageAmount = recurringPrefs.getString("amount_$key", null)?.toDoubleOrNull() ?: candidate.averageAmount,
+                        category = recurringPrefs.getString("category_$key", candidate.category) ?: candidate.category,
+                        dayOfMonth = recurringPrefs.getInt("day_$key", candidate.dayOfMonth)
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("🔄 Scan for recurring transactions")
+        }
         Spacer(Modifier.height(8.dp))
         if (recurringCandidates.isEmpty()) {
             Card(Modifier.fillMaxWidth()) {
