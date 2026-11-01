@@ -132,7 +132,7 @@ object TransactionParser {
         return vetoSignals.any { it in lower }
     }
 
-    private fun isUpcomingOrMandate(lower: String): Boolean {
+        private fun isUpcomingOrMandate(lower: String): Boolean {
         val futureSignals = listOf(
             "will be debited",
             "will be credited",
@@ -141,13 +141,23 @@ object TransactionParser {
             "scheduled to be debited",
             "scheduled debit",
             "upcoming debit",
-            "pause mandate",
+            "auto debited",
+            "auto-debited",
+            "auto debit",
+            "auto-debit",
+            "will auto debit",
+            "will be auto debited",
+            "will be auto-debited",
+            "e-mandate",
+            "e mandate",
+            "mandate set up",
+            "autopay facility",
             "merchantmandate",
-            "upi mandate"
+            "upi mandate",
+            "pause mandate"
         )
         return futureSignals.any { it in lower }
     }
-
     private fun isLikelyFinancialSms(sender: String, body: String): Boolean {
         val normalizedSender = sender.uppercase(Locale.ROOT).replace(Regex("[^A-Z0-9]"), "")
         val knownSender = knownFinancialSenders.any { normalizedSender.contains(it) }
