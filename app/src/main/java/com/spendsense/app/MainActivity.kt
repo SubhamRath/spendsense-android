@@ -162,7 +162,7 @@ private fun SpendSenseApp(
                     page == 3,
                     { page = 3 },
                     icon = { Text("▥", fontSize = 26.sp) },
-                    label = { Text("Graphs") }
+                    label = { Text("Insights") }
                 )
             }
         }
@@ -171,7 +171,7 @@ private fun SpendSenseApp(
             0 -> HomePage(transactions, categories, onScan, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory, Modifier.padding(padding))
             1 -> ActivityPage(transactions, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory, onAddTransaction, Modifier.padding(padding))
             2 -> TargetsPage(transactions, categories, Modifier.padding(padding))
-            else -> GraphsPage(transactions, Modifier.padding(padding))
+            else -> InsightsPage(transactions, Modifier.padding(padding))
         }
     }
 }
@@ -683,7 +683,7 @@ private fun CategoryTargetDialog(
 }
 
 @Composable
-private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
+private fun InsightsPage(transactions: List<Transaction>, modifier: Modifier) {
     var range by remember { mutableStateOf(7) }
     val now = Calendar.getInstance()
     val start = Calendar.getInstance().apply {
