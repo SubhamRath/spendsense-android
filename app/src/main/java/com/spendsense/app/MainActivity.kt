@@ -155,6 +155,12 @@ private fun SpendSenseApp(
                 NavigationBarItem(
                     page == 2,
                     { page = 2 },
+                    icon = { Text("◎", fontSize = 26.sp) },
+                    label = { Text("Targets") }
+                )
+                NavigationBarItem(
+                    page == 3,
+                    { page = 3 },
                     icon = { Text("▥", fontSize = 26.sp) },
                     label = { Text("Graphs") }
                 )
@@ -164,6 +170,7 @@ private fun SpendSenseApp(
         when (page) {
             0 -> HomePage(transactions, categories, onScan, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory, Modifier.padding(padding))
             1 -> ActivityPage(transactions, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory, onAddTransaction, Modifier.padding(padding))
+            2 -> TargetsPage(transactions, categories, Modifier.padding(padding))
             else -> GraphsPage(transactions, Modifier.padding(padding))
         }
     }
@@ -376,6 +383,300 @@ private fun AddTransactionDialog(
             TextButton(onClick = {
                 amount.toDoubleOrNull()?.takeIf { it > 0 }?.let { onAdd(it, type, merchant, category, bank, selectedDate.timeInMillis) }
             }) { Text("Add") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun TargetsPage(
+    transactions: List<Transaction>,
+    categories: List<String>,
+    modifier: Modifier
+) {
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("spendsense_budget", android.content.Context.MODE_PRIVATE) }
+    var displayedMonth by remember { mutableStateOf(Calendar.getInstance().get(Calendar.MONTH)) }
+    var displayedYear by remember { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
+    var showSpendDialog by remember { mutableStateOf(false) }
+    var showInvestDialog by remember { mutableStateOf(false) }
+    var showCategoryDialog by remember { mutableStateOf(false) }
+    var selectedCategory by remember { mutableStateOf(categories.firstOrNull() ?: "Food") }
+
+    val monthTransactions = remember(transactions, displayedMonth, displayedYear) {
+        transactions.filterByMonth(displayedYear, displayedMonth)
+    }
+    val spent = monthTransactions
+        .filter { it.type == TransactionType.DEBIT && it.category != "Transfers" && it.category != "Investments" }
+        .sumOf { it.amount }
+    val invested = monthTransactions
+        .filter { it.type == TransactionType.DEBIT && it.category == "Investments" }
+        .sumOf { it.amount }
+
+    val spendTarget = prefs.getFloat("spend_target_" + displayedYear + "_" + displayedMonth, 0f).toDouble()
+    val investTarget = prefs.getFloat("invest_target_" + displayedYear + "_" + displayedMonth, 0f).toDouble()
+    val spendProgress = if (spendTarget > 0) (spent / spendTarget).coerceIn(0.0, 1.0) else 0.0
+    val investProgress = if (investTarget > 0) (invested / investTarget).coerceIn(0.0, 1.0) else 0.0
+
+    Column(
+        modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 12.dp)
+    ) {
+        Text("Targets", style = MaterialTheme.typography.headlineMedium)
+        Text(
+            "Set monthly goals for spending, investing and categories",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(12.dp))
+
+        MonthHeader(
+            displayedYear,
+            displayedMonth,
+            {
+                if (displayedMonth == Calendar.JANUARY) { displayedMonth = Calendar.DECEMBER; displayedYear-- } else displayedMonth--
+            },
+            {
+                if (displayedMonth == Calendar.DECEMBER) { displayedMonth = Calendar.JANUARY; displayedYear++ } else displayedMonth++
+            }
+        )
+
+        Spacer(Modifier.height(10.dp))
+        TargetCard(
+            title = "Spend target",
+            actual = spent,
+            target = spendTarget,
+            progress = spendProgress,
+            goodWhenUnder = true,
+            onEdit = { showSpendDialog = true }
+        )
+        Spacer(Modifier.height(10.dp))
+        TargetCard(
+            title = "Invest target",
+            actual = invested,
+            target = investTarget,
+            progress = investProgress,
+            goodWhenUnder = false,
+            onEdit = { showInvestDialog = true }
+        )
+
+        Spacer(Modifier.height(18.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("Category spend targets", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    "Monthly limits by category",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            TextButton(onClick = { showCategoryDialog = true }) { Text("Add / edit") }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        val targetCategories = categories.filter { it != "Investments" && it != "Transfers" }
+        if (targetCategories.isEmpty()) {
+            Text("Add a category first.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        } else {
+            targetCategories.forEach { category ->
+                val target = prefs.getFloat("category_target_" + displayedYear + "_" + displayedMonth + "_" + category, 0f).toDouble()
+                val actual = monthTransactions
+                    .filter { it.type == TransactionType.DEBIT && it.category == category }
+                    .sumOf { it.amount }
+                CategoryTargetRow(
+                    category = category,
+                    actual = actual,
+                    target = target,
+                    onEdit = {
+                        selectedCategory = category
+                        showCategoryDialog = true
+                    }
+                )
+                Spacer(Modifier.height(6.dp))
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            "Targets reset independently for each month.",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+
+    if (showSpendDialog) {
+        BudgetDialog(
+            current = spendTarget,
+            title = "Monthly spend target",
+            onDismiss = { showSpendDialog = false },
+            onSave = { amount ->
+                prefs.edit().putFloat("spend_target_" + displayedYear + "_" + displayedMonth, amount.toFloat()).apply()
+                showSpendDialog = false
+            }
+        )
+    }
+
+    if (showInvestDialog) {
+        BudgetDialog(
+            current = investTarget,
+            title = "Monthly invest target",
+            onDismiss = { showInvestDialog = false },
+            onSave = { amount ->
+                prefs.edit().putFloat("invest_target_" + displayedYear + "_" + displayedMonth, amount.toFloat()).apply()
+                showInvestDialog = false
+            }
+        )
+    }
+
+    if (showCategoryDialog) {
+        CategoryTargetDialog(
+            categories = categories.filter { it != "Investments" && it != "Transfers" },
+            selectedCategory = selectedCategory,
+            prefs = prefs,
+            year = displayedYear,
+            month = displayedMonth,
+            spending = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" && it.category != "Investments" },
+            onDismiss = { showCategoryDialog = false }
+        )
+    }
+}
+
+@Composable
+private fun TargetCard(
+    title: String,
+    actual: Double,
+    target: Double,
+    progress: Double,
+    goodWhenUnder: Boolean,
+    onEdit: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(14.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        if (target > 0) currencyFormat(actual) + " of " + currencyFormat(target)
+                        else "No target set",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onEdit) { Text(if (target > 0) "Edit" else "Set") }
+            }
+            if (target > 0) {
+                Spacer(Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { progress.toFloat() },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(4.dp))
+                val message = if (goodWhenUnder) {
+                    if (actual > target) "Over target by " + currencyFormat(actual - target)
+                    else currencyFormat(target - actual) + " remaining"
+                } else {
+                    if (actual >= target) "Target reached"
+                    else currencyFormat(target - actual) + " left to invest"
+                }
+                Text(
+                    message,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = if (goodWhenUnder && actual > target) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryTargetRow(
+    category: String,
+    actual: Double,
+    target: Double,
+    onEdit: () -> Unit
+) {
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(category, style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        if (target > 0) currencyFormat(actual) + " / " + currencyFormat(target)
+                        else currencyFormat(actual) + " spent • no target",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onEdit) { Text(if (target > 0) "Edit" else "Set") }
+            }
+            if (target > 0) {
+                LinearProgressIndicator(
+                    progress = { (actual / target).coerceIn(0.0, 1.0).toFloat() },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CategoryTargetDialog(
+    categories: List<String>,
+    selectedCategory: String,
+    prefs: android.content.SharedPreferences,
+    year: Int,
+    month: Int,
+    spending: List<Transaction>,
+    onDismiss: () -> Unit
+) {
+    var selected by remember(selectedCategory) { mutableStateOf(selectedCategory) }
+    var amount by remember { mutableStateOf("") }
+    val key = "category_target_" + year + "_" + month + "_" + selected
+    val current = prefs.getFloat(key, 0f).toDouble()
+
+    LaunchedEffect(selected, year, month) {
+        amount = if (current > 0) current.toString() else ""
+    }
+
+    val spent = spending.filter { it.category == selected }.sumOf { it.amount }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Category spend target") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    categories.forEach { category ->
+                        FilterChip(selected == category, { selected = category }, label = { Text(category) })
+                    }
+                }
+                Text(
+                    "Spent this month: " + currencyFormat(spent),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                OutlinedTextField(
+                    value = amount,
+                    onValueChange = { amount = it },
+                    label = { Text("Monthly target") },
+                    prefix = { Text("₹") },
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = {
+                amount.toDoubleOrNull()?.takeIf { it > 0 }?.let {
+                    prefs.edit().putFloat(key, it.toFloat()).apply()
+                    onDismiss()
+                }
+            }) { Text("Save") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
@@ -803,19 +1104,12 @@ private fun HomePage(
     var displayedMonth by remember { mutableStateOf(Calendar.getInstance().get(Calendar.MONTH)) }
     var displayedYear by remember { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
     var selectedDay by remember { mutableStateOf<Int?>(null) }
-    var showBudgetDialog by remember { mutableStateOf(false) }
-    var showCategoryBudgetDialog by remember { mutableStateOf(false) }
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences("spendsense_budget", android.content.Context.MODE_PRIVATE) }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
     val monthTransactions = remember(transactions, displayedMonth, displayedYear) { transactions.filterByMonth(displayedYear, displayedMonth) }
     val monthIncome = monthTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
     val monthExpenses = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
     val monthInvested = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" }.sumOf { it.amount }
     val monthSpent = monthExpenses - monthInvested
-    val budgetKey = "overall_" + displayedYear + "_" + displayedMonth
-    val monthlyBudget = prefs.getFloat(budgetKey, 0f).toDouble()
-    val budgetProgress = if (monthlyBudget > 0) (monthSpent / monthlyBudget).coerceIn(0.0, 1.0) else 0.0
     val selectedTransactions = selectedDay?.let { day ->
         monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
     } ?: emptyList()
@@ -849,40 +1143,6 @@ private fun HomePage(
         }
         Spacer(Modifier.height(12.dp))
         CalendarView(displayedYear, displayedMonth, monthTransactions, selectedDay) { selectedDay = it }
-
-        Spacer(Modifier.height(14.dp))
-        Card(Modifier.fillMaxWidth()) {
-            Column(Modifier.padding(14.dp)) {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text("Monthly spending budget", style = MaterialTheme.typography.titleMedium)
-                        Text(
-                            if (monthlyBudget > 0) currency.format(monthSpent) + " of " + currency.format(monthlyBudget) else "Set a budget to track your spending",
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    TextButton(onClick = { showBudgetDialog = true }) { Text(if (monthlyBudget > 0) "Edit" else "Set") }
-                }
-                if (monthlyBudget > 0) {
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(progress = { budgetProgress.toFloat() }, modifier = Modifier.fillMaxWidth())
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if (monthSpent > monthlyBudget) "Over budget by " + currency.format(monthSpent - monthlyBudget) else currency.format(monthlyBudget - monthSpent) + " remaining",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (monthSpent > monthlyBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        if (categories.isNotEmpty()) {
-            Spacer(Modifier.height(10.dp))
-            TextButton(onClick = { showCategoryBudgetDialog = true }, modifier = Modifier.fillMaxWidth()) {
-                Text("Manage category budgets")
-            }
-        }
 
         val recurring = findRecurringCandidates(transactions)
         if (recurring.isNotEmpty()) {
@@ -918,23 +1178,6 @@ private fun HomePage(
         }
     }
 
-    if (showCategoryBudgetDialog) {
-        CategoryBudgetDialog(
-            categories = categories,
-            prefs = prefs,
-            year = displayedYear,
-            month = displayedMonth,
-            spending = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" && it.category != "Investments" },
-            onDismiss = { showCategoryBudgetDialog = false }
-        )
-    }
-
-    if (showBudgetDialog) {
-        BudgetDialog(monthlyBudget, { showBudgetDialog = false }) { amount ->
-            prefs.edit().putFloat(budgetKey, amount.toFloat()).apply()
-            showBudgetDialog = false
-        }
-    }
 }
 
 @Composable
@@ -1341,11 +1584,16 @@ private fun CategoryBudgetDialog(
 }
 
 @Composable
-private fun BudgetDialog(current: Double, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+private fun BudgetDialog(
+    current: Double,
+    title: String = "Monthly target",
+    onDismiss: () -> Unit,
+    onSave: (Double) -> Unit
+) {
     var amount by remember { mutableStateOf(if (current > 0) current.toString() else "") }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Monthly spending budget") },
+        title = { Text(title) },
         text = { OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Budget amount") }, prefix = { Text("₹") }, singleLine = true) },
         confirmButton = { TextButton(onClick = { amount.toDoubleOrNull()?.takeIf { it > 0 }?.let(onSave) }) { Text("Save") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
