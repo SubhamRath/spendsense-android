@@ -23,6 +23,9 @@ interface TransactionDao {
     @Query("UPDATE transactions SET sender = :bank WHERE smsId = :smsId")
     suspend fun updateBank(smsId: Long, bank: String)
 
+    @Query("UPDATE transactions SET amount = :amount, type = :type, merchant = :merchant, timestamp = :timestamp WHERE smsId = :smsId")
+    suspend fun updateTransaction(smsId: Long, amount: Double, type: String, merchant: String, timestamp: Long)
+
     @Query("DELETE FROM transactions WHERE smsId = :smsId")
     suspend fun deleteTransaction(smsId: Long)
 }
