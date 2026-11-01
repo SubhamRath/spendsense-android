@@ -642,43 +642,94 @@ private fun TargetCard(
     goodWhenUnder: Boolean,
     onEdit: () -> Unit
 ) {
-    val accent = if (goodWhenUnder) Color(0xFFFF8A65) else Color(0xFF66BB6A)
+    val accent = if (goodWhenUnder) Color(0xFFFF7043) else Color(0xFF00C853)
+    val emoji = if (goodWhenUnder) "💸" else "🚀"
+    val subtitle = if (goodWhenUnder) "Keep your spending on track" else "Grow your investments"
     Card(
         Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.12f))
+        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.14f))
     ) {
-        Column(Modifier.padding(14.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text((if (goodWhenUnder) "💸 " else "📈 ") + title, style = MaterialTheme.typography.titleMedium)
+        Column(Modifier.padding(16.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        Modifier
+                            .size(46.dp)
+                            .background(accent.copy(alpha = 0.22f), MaterialTheme.shapes.large),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(emoji, fontSize = 24.sp)
+                    }
+                    Spacer(Modifier.width(12.dp))
+                    Column {
+                        Text(title, style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                TextButton(onClick = onEdit) {
+                    Text(if (target > 0) "Edit" else "Set", color = accent)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            if (target > 0) {
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        if (target > 0) currencyFormat(actual) + " of " + currencyFormat(target)
-                        else "No target set",
+                        currencyFormat(actual),
+                        style = MaterialTheme.typography.titleLarge,
+                        color = accent
+                    )
+                    Text(
+                        "of " + currencyFormat(target),
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(onClick = onEdit) { Text(if (target > 0) "Edit" else "Set") }
-            }
-            if (target > 0) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(7.dp))
                 LinearProgressIndicator(
                     progress = { progress.toFloat() },
-                    modifier = Modifier.fillMaxWidth(),
-                    color = accent
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp),
+                    color = accent,
+                    trackColor = accent.copy(alpha = 0.18f)
                 )
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(6.dp))
                 val message = if (goodWhenUnder) {
-                    if (actual > target) "Over target by " + currencyFormat(actual - target)
-                    else currencyFormat(target - actual) + " remaining"
+                    if (actual > target) "⚠️ Over target by " + currencyFormat(actual - target)
+                    else "✨ " + currencyFormat(target - actual) + " remaining"
                 } else {
-                    if (actual >= target) "Target reached"
-                    else currencyFormat(target - actual) + " left to invest"
+                    if (actual >= target) "🎉 Target reached!"
+                    else "🔥 " + currencyFormat(target - actual) + " left to invest"
                 }
                 Text(
                     message,
                     style = MaterialTheme.typography.labelSmall,
-                    color = if (goodWhenUnder && actual > target) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    color = if (goodWhenUnder && actual > target)
+                        MaterialTheme.colorScheme.error
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    "🎯 No target set yet — let’s make one!",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
