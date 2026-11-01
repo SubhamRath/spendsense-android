@@ -795,7 +795,8 @@ private fun TransactionRow(
     onDeleteTransaction: (Transaction) -> Unit,
     onAddCategory: (String) -> Unit
 ) {
-    var menuExpanded by remember { mutableStateOf(false) }
+    var categoryMenuExpanded by remember { mutableStateOf(false) }
+    var editMenuExpanded by remember { mutableStateOf(false) }
     var confirmExpanded by remember { mutableStateOf(false) }
     var addCategoryExpanded by remember { mutableStateOf(false) }
     var bankDialog by remember { mutableStateOf(false) }
@@ -836,73 +837,102 @@ private fun TransactionRow(
                     style = MaterialTheme.typography.titleSmall,
                     color = if (transaction.type == TransactionType.CREDIT) Color(0xFF8FE3AE) else MaterialTheme.colorScheme.onSurface
                 )
-                TextButton(
-                    onClick = { menuExpanded = true },
-                    contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
-                ) { Text("Edit", fontSize = 12.sp) }
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TextButton(
+                        onClick = { categoryMenuExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) { Text("Category", fontSize = 12.sp) }
+                    TextButton(
+                        onClick = { editMenuExpanded = true },
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp)
+                    ) { Text("Edit", fontSize = 12.sp) }
+                }
             }
         }
     }
 
-    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+    DropdownMenu(
+        expanded = categoryMenuExpanded,
+        onDismissRequest = { categoryMenuExpanded = false }
+    ) {
         categories.forEach { category ->
             DropdownMenuItem(
                 text = { Text(category) },
                 onClick = {
                     selectedCategory = category
-                    menuExpanded = false
+                    categoryMenuExpanded = false
                     confirmExpanded = true
                 }
             )
         }
-        DropdownMenuItem(text = { Text("Change account") }, onClick = { menuExpanded = false; bankDialog = true })
-        DropdownMenuItem(text = { Text("Delete", color = MaterialTheme.colorScheme.error) }, onClick = { menuExpanded = false; deleteDialog = true })
-        DropdownMenuItem(text = { Text("+ Add new category") }, onClick = { menuExpanded = false; addCategoryExpanded = true })
+        HorizontalDivider()
+        DropdownMenuItem(
+            text = { Text("New category…") },
+            onClick = {
+                categoryMenuExpanded = false
+                addCategoryExpanded = true
+            }
+        )
+    }
+
+    DropdownMenu(
+        expanded = editMenuExpanded,
+        onDismissRequest = { editMenuExpanded = false }
+    ) {
+        DropdownMenuItem(
+            text = { Text("Change account") },
+            onClick = {
+                editMenuExpanded = false
+                bankDialog = true
+            }
+        )
+        DropdownMenuItem(
+            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+            onClick = {
+                editMenuExpanded = false
+                deleteDialog = true
+            }
+        )
+    }
+
+    if (bankDialog) {
+        BankDialog(
+            current = bankDisplayName(transaction.sender),
+            onDismiss = { bankDialog = false },
+            onSave = { bank ->
+                bankDialog = false
+                onChangeBank(transaction, bank)
+            }
+        )
     }
 
     if (deleteDialog) {
         AlertDialog(
             onDismissRequest = { deleteDialog = false },
             title = { Text("Delete transaction?") },
-            text = { Text("This transaction will be permanently removed from SpendSense.") },
+            text = { Text("This transaction will be removed from SpendSense.") },
             confirmButton = {
                 TextButton(onClick = {
-                    onDeleteTransaction(transaction)
                     deleteDialog = false
+                    onDeleteTransaction(transaction)
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { deleteDialog = false }) { Text("Cancel") } }
         )
     }
 
-    if (bankDialog) {
-        var bankName by remember(transaction.sender) { mutableStateOf(bankDisplayName(transaction.sender)) }
-        AlertDialog(
-            onDismissRequest = { bankDialog = false },
-            title = { Text("Edit account") },
-            text = {
-                OutlinedTextField(value = bankName, onValueChange = { bankName = it }, label = { Text("Bank / Cash") }, singleLine = true)
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    onChangeBank(transaction, bankName.trim().ifBlank { "Cash" })
-                    bankDialog = false
-                }) { Text("Save") }
-            },
-            dismissButton = { TextButton(onClick = { bankDialog = false }) { Text("Cancel") } }
-        )
-    }
-
     if (confirmExpanded) {
         AlertDialog(
             onDismissRequest = { confirmExpanded = false },
-            title = { Text("Change category") },
-            text = { Text("Apply $selectedCategory to future " + transaction.merchant + " transactions too?") },
+            title = { Text("Apply category?") },
+            text = {
+                Text("Apply “$selectedCategory” to this transaction only, or remember it for future transactions from this merchant?")
+            },
             confirmButton = {
                 TextButton(onClick = {
                     confirmExpanded = false
                     onChangeCategory(transaction, selectedCategory, true)
-                }) { Text("This & future") }
+                }) { Text("Remember") }
             },
             dismissButton = {
                 TextButton(onClick = {
@@ -918,7 +948,12 @@ private fun TransactionRow(
             onDismissRequest = { addCategoryExpanded = false },
             title = { Text("New category") },
             text = {
-                OutlinedTextField(value = newCategory, onValueChange = { newCategory = it }, label = { Text("Category name") }, singleLine = true)
+                OutlinedTextField(
+                    value = newCategory,
+                    onValueChange = { newCategory = it },
+                    label = { Text("Category name") },
+                    singleLine = true
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
