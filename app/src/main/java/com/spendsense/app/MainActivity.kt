@@ -182,23 +182,80 @@ private fun ActivityPage(
     modifier: Modifier
 ) {
     var showAdd by remember { mutableStateOf(false) }
+    var query by remember { mutableStateOf("") }
+    var typeFilter by remember { mutableStateOf<TransactionType?>(null) }
+    var categoryFilter by remember { mutableStateOf<String?>(null) }
+    var categoryMenu by remember { mutableStateOf(false) }
+    val filteredTransactions = remember(transactions, query, typeFilter, categoryFilter) {
+        val q = query.trim()
+        transactions.filter { transaction ->
+            val matchesQuery = q.isBlank() ||
+                transaction.merchant.contains(q, ignoreCase = true) ||
+                transaction.category.contains(q, ignoreCase = true) ||
+                transaction.sender.contains(q, ignoreCase = true)
+            val matchesType = typeFilter == null || transaction.type == typeFilter
+            val matchesCategory = categoryFilter == null || transaction.category == categoryFilter
+            matchesQuery && matchesType && matchesCategory
+        }
+    }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
             Text("Activity", style = MaterialTheme.typography.headlineMedium)
-            Text(transactions.size.toString() + " transactions", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(10.dp))
+            Text(filteredTransactions.size.toString() + " of " + transactions.size + " transactions", style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.height(8.dp))
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search merchant, category or account") },
+                singleLine = true,
+                trailingIcon = {
+                    if (query.isNotBlank()) TextButton(onClick = { query = "" }) { Text("Clear") }
+                }
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = typeFilter == null, onClick = { typeFilter = null }, label = { Text("All") })
+                FilterChip(selected = typeFilter == TransactionType.DEBIT, onClick = {
+                    typeFilter = if (typeFilter == TransactionType.DEBIT) null else TransactionType.DEBIT
+                }, label = { Text("Spent") })
+                FilterChip(selected = typeFilter == TransactionType.CREDIT, onClick = {
+                    typeFilter = if (typeFilter == TransactionType.CREDIT) null else TransactionType.CREDIT
+                }, label = { Text("Earned") })
+                Box {
+                    FilterChip(selected = categoryFilter != null, onClick = { categoryMenu = true },
+                        label = { Text(categoryFilter ?: "Category") })
+                    DropdownMenu(expanded = categoryMenu, onDismissRequest = { categoryMenu = false }) {
+                        DropdownMenuItem(text = { Text("All categories") }, onClick = {
+                            categoryFilter = null
+                            categoryMenu = false
+                        })
+                        categories.forEach { category ->
+                            DropdownMenuItem(text = { Text(category) }, onClick = {
+                                categoryFilter = category
+                                categoryMenu = false
+                            })
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 90.dp)
             ) {
-                val monthGroups = transactions
+                val monthGroups = filteredTransactions
                     .groupBy {
                         Calendar.getInstance().apply { timeInMillis = it.timestamp }
                             .let { cal -> cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH) }
                     }
                     .toSortedMap(compareByDescending<Pair<Int, Int>> { it.first }.thenByDescending { it.second })
+
+                if (filteredTransactions.isEmpty()) {
+                    item { Text("No transactions match your filters.", Modifier.fillMaxWidth().padding(vertical = 28.dp), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
 
                 monthGroups.forEach { (yearMonth, monthTransactions) ->
                     val (year, month) = yearMonth
