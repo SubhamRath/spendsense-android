@@ -336,14 +336,18 @@ private fun GraphsPage(transactions: List<Transaction>, modifier: Modifier) {
             FilterChip(range == 30, { range = 30 }, label = { Text("30 days") })
         }
         Spacer(Modifier.height(14.dp))
-        SpendingBarChart(days, daily)
+        SpendingBarChart(days, daily, spending)
         Spacer(Modifier.height(12.dp))
-        CategoryBreakdown(byCategory, totalSpent)
+        CategoryBreakdown(byCategory, totalSpent, spending)
     }
 }
 
 @Composable
-private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
+private fun SpendingBarChart(
+    days: List<Calendar>,
+    values: List<Double>,
+    spending: List<Transaction>
+) {
     val barColor = MaterialTheme.colorScheme.primary
     val gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
     val maxValue = maxOf(1.0, values.maxOrNull() ?: 1.0)
@@ -358,6 +362,16 @@ private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
         else -> kotlin.math.ceil(maxValue / 100000.0) * 100000.0
     }
     val yTicks = listOf(chartMax, chartMax * 0.75, chartMax * 0.5, chartMax * 0.25, 0.0)
+    var selectedDay by remember { mutableStateOf<Int?>(null) }
+
+    fun dayTransactions(index: Int): List<Transaction> {
+        val day = days[index]
+        return spending.filter {
+            val c = Calendar.getInstance().apply { timeInMillis = it.timestamp }
+            c.get(Calendar.YEAR) == day.get(Calendar.YEAR) &&
+                c.get(Calendar.DAY_OF_YEAR) == day.get(Calendar.DAY_OF_YEAR)
+        }.sortedByDescending { it.timestamp }
+    }
 
     Card(
         Modifier.fillMaxWidth(),
@@ -385,127 +399,115 @@ private fun SpendingBarChart(days: List<Calendar>, values: List<Double>) {
                     horizontalAlignment = Alignment.End
                 ) {
                     yTicks.forEach { tick ->
+                        Text(compactAmount(tick), style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+
+                val barColumn: @Composable (Int) -> Unit = { i ->
+                    val day = days[i]
+                    Column(
+                        Modifier
+                            .fillMaxHeight()
+                            .then(if (days.size <= 7) Modifier.weight(1f) else Modifier.width(44.dp))
+                            .clickable { selectedDay = i },
+                        verticalArrangement = Arrangement.Bottom,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (values[i] > 0) {
+                            Text(compactAmount(values[i]), style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1, softWrap = false)
+                            Spacer(Modifier.height(4.dp))
+                        } else {
+                            Spacer(Modifier.height(18.dp))
+                        }
+                        Box(
+                            Modifier
+                                .fillMaxWidth(0.72f)
+                                .height((150f * (values[i] / chartMax).toFloat())
+                                    .coerceAtLeast(if (values[i] > 0) 3f else 0f).dp)
+                                .background(barColor, MaterialTheme.shapes.small)
+                        )
+                        Spacer(Modifier.height(8.dp))
                         Text(
-                            compactAmount(tick),
+                            if (days.size <= 7) SimpleDateFormat("EEE", Locale.getDefault()).format(day.time).take(1)
+                            else SimpleDateFormat("dd", Locale.getDefault()).format(day.time),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
 
-                Spacer(Modifier.width(8.dp))
-
                 if (days.size <= 7) {
-                    Box(Modifier.weight(1f).fillMaxHeight()) {
-                        Column(
-                            Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            repeat(5) {
-                                HorizontalDivider(color = gridColor, thickness = 1.dp)
-                            }
-                        }
-
-                        Row(
-                            Modifier.fillMaxSize().padding(top = 2.dp),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            verticalAlignment = Alignment.Bottom
-                        ) {
-                            days.forEachIndexed { i, day ->
-                                Column(
-                                    Modifier.weight(1f).fillMaxHeight(),
-                                    verticalArrangement = Arrangement.Bottom,
-                                    horizontalAlignment = Alignment.CenterHorizontally
-                                ) {
-                                    if (values[i] > 0) {
-                                        Text(
-                                            compactAmount(values[i]),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                        Spacer(Modifier.height(4.dp))
-                                    } else {
-                                        Spacer(Modifier.height(18.dp))
-                                    }
-
-                                    Box(
-                                        Modifier
-                                            .fillMaxWidth(0.72f)
-                                            .height(
-                                                (150f * (values[i] / chartMax).toFloat())
-                                                    .coerceAtLeast(if (values[i] > 0) 3f else 0f)
-                                                    .dp
-                                            )
-                                            .background(barColor, MaterialTheme.shapes.small)
-                                    )
-                                    Spacer(Modifier.height(8.dp))
-                                    Text(
-                                        SimpleDateFormat("EEE", Locale.getDefault())
-                                            .format(day.time)
-                                            .take(1),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        }
-                    }
+                    Row(
+                        Modifier.fillMaxSize().padding(top = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) { days.indices.forEach { barColumn(it) } }
                 } else {
                     Row(
-                        Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .horizontalScroll(rememberScrollState()),
+                        Modifier.fillMaxSize().horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(7.dp),
                         verticalAlignment = Alignment.Bottom
-                    ) {
-                        days.forEachIndexed { i, day ->
-                            Column(
-                                Modifier.width(34.dp).fillMaxHeight(),
-                                verticalArrangement = Arrangement.Bottom,
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                if (values[i] > 0) {
-                                    Text(
-                                        compactAmount(values[i]),
-                                        style = MaterialTheme.typography.labelSmall,
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                } else {
-                                    Spacer(Modifier.height(18.dp))
-                                }
+                    ) { days.indices.forEach { barColumn(it) } }
+                }
+            }
 
-                                Box(
-                                    Modifier
-                                        .fillMaxWidth(0.72f)
-                                        .height(
-                                            (150f * (values[i] / chartMax).toFloat())
-                                                .coerceAtLeast(if (values[i] > 0) 3f else 0f)
-                                                .dp
-                                        )
-                                        .background(barColor, MaterialTheme.shapes.small)
-                                )
-                                Spacer(Modifier.height(8.dp))
-                                Text(
-                                    SimpleDateFormat("dd", Locale.getDefault()).format(day.time),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+            Text(
+                "Tap a bar to see transactions",
+                Modifier.fillMaxWidth().padding(top = 8.dp),
+                textAlign = TextAlign.Center,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+
+    selectedDay?.let { index ->
+        val txns = dayTransactions(index)
+        val title = SimpleDateFormat("EEE, dd MMM", Locale.getDefault()).format(days[index].time)
+        AlertDialog(
+            onDismissRequest = { selectedDay = null },
+            title = { Text(title) },
+            text = {
+                if (txns.isEmpty()) {
+                    Text("No spending on this day.")
+                } else {
+                    Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                        Text("Total " + compactAmount(txns.sumOf { it.amount }),
+                            style = MaterialTheme.typography.titleSmall)
+                        Spacer(Modifier.height(8.dp))
+                        txns.forEach { tx ->
+                            Row(
+                                Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Column(Modifier.weight(1f)) {
+                                    Text(tx.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    Text(tx.category + " • " + bankDisplayName(tx.sender),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                                Text(currencyFormat(tx.amount), style = MaterialTheme.typography.labelSmall)
                             }
                         }
                     }
                 }
-            }
-        }
+            },
+            confirmButton = { TextButton(onClick = { selectedDay = null }) { Text("Close") } }
+        )
     }
 }
 
 @Composable
-private fun CategoryBreakdown(categories: List<Pair<String, Double>>, total: Double) {
+private fun CategoryBreakdown(
+    categories: List<Pair<String, Double>>,
+    total: Double,
+    spending: List<Transaction>
+) {
+    var selectedCategory by remember { mutableStateOf<String?>(null) }
+
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
@@ -517,7 +519,8 @@ private fun CategoryBreakdown(categories: List<Pair<String, Double>>, total: Dou
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text("By category", style = MaterialTheme.typography.titleMedium)
-                Text(compactAmount(total), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(compactAmount(total), style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             Spacer(Modifier.height(12.dp))
             if (categories.isEmpty()) {
@@ -525,27 +528,60 @@ private fun CategoryBreakdown(categories: List<Pair<String, Double>>, total: Dou
             } else {
                 categories.take(6).forEach { (name, amount) ->
                     val fraction = if (total > 0) (amount / total).toFloat() else 0f
-                    Column(Modifier.fillMaxWidth().padding(bottom = 10.dp)) {
+                    Column(
+                        Modifier.fillMaxWidth().padding(bottom = 10.dp).clickable { selectedCategory = name }
+                    ) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(name, style = MaterialTheme.typography.bodyMedium, maxLines = 1,
+                                overflow = TextOverflow.Ellipsis)
                             Text(compactAmount(amount), style = MaterialTheme.typography.bodyMedium)
                         }
                         Spacer(Modifier.height(5.dp))
-                        Box(
-                            Modifier.fillMaxWidth().height(7.dp)
-                                .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)
-                        ) {
-                            Box(
-                                Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight()
-                                    .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small)
-                            )
+                        Box(Modifier.fillMaxWidth().height(7.dp)
+                            .background(MaterialTheme.colorScheme.surfaceVariant, MaterialTheme.shapes.small)) {
+                            Box(Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight()
+                                .background(MaterialTheme.colorScheme.primary, MaterialTheme.shapes.small))
                         }
                     }
                 }
+                Text("Tap a category for transaction details", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
+
+    selectedCategory?.let { category ->
+        val txns = spending.filter { it.category == category }.sortedByDescending { it.timestamp }
+        AlertDialog(
+            onDismissRequest = { selectedCategory = null },
+            title = { Text(category) },
+            text = {
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                    Text("Total " + compactAmount(txns.sumOf { it.amount }), style = MaterialTheme.typography.titleSmall)
+                    Spacer(Modifier.height(8.dp))
+                    txns.forEach { tx ->
+                        Row(
+                            Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(Modifier.weight(1f)) {
+                                Text(tx.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Text(SimpleDateFormat("dd MMM · h:mm a", Locale.getDefault()).format(Date(tx.timestamp)),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
+                            Text(currencyFormat(tx.amount), style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = { TextButton(onClick = { selectedCategory = null }) { Text("Close") } }
+        )
+    }
 }
+
+private fun currencyFormat(amount: Double): String =
+    NumberFormat.getCurrencyInstance(Locale("en", "IN")).format(amount)
 
 @Composable
 private fun HomePage(
