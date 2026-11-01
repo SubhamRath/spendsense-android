@@ -178,95 +178,115 @@ private fun ActivityPage(
     onDeleteTransaction: (Transaction) -> Unit,
     onEditTransaction: (Transaction, Double, TransactionType, String, Long) -> Unit,
     onAddCategory: (String) -> Unit,
-    onAddTransaction: (Double, TransactionType, String, String, String, Long) -> Unit,
+    onAddTransaction: (Double, TransactionType, String, String, Long) -> Unit,
     modifier: Modifier
 ) {
     var showAdd by remember { mutableStateOf(false) }
     var query by remember { mutableStateOf("") }
     var typeFilter by remember { mutableStateOf<TransactionType?>(null) }
     var categoryFilter by remember { mutableStateOf<String?>(null) }
+    var bankFilter by remember { mutableStateOf<String?>(null) }
+    var monthFilter by remember { mutableStateOf<Pair<Int, Int>?>(null) }
     var categoryMenu by remember { mutableStateOf(false) }
-    val filteredTransactions = remember(transactions, query, typeFilter, categoryFilter) {
+    var bankMenu by remember { mutableStateOf(false) }
+    var monthMenu by remember { mutableStateOf(false) }
+    var sortMenu by remember { mutableStateOf(false) }
+    var sortMode by remember { mutableStateOf("Newest") }
+
+    val bankOptions = remember(transactions) { transactions.map { bankDisplayName(it.sender) }.distinct().sorted() }
+    val monthOptions = remember(transactions) {
+        transactions.map { Calendar.getInstance().apply { timeInMillis = it.timestamp }.let { c -> c.get(Calendar.YEAR) to c.get(Calendar.MONTH) } }
+            .distinct().sortedWith(compareByDescending<Pair<Int, Int>> { it.first }.thenByDescending { it.second })
+    }
+    val filteredTransactions = remember(transactions, query, typeFilter, categoryFilter, bankFilter, monthFilter, sortMode) {
         val q = query.trim()
         transactions.filter { transaction ->
-            val matchesQuery = q.isBlank() ||
-                transaction.merchant.contains(q, ignoreCase = true) ||
-                transaction.category.contains(q, ignoreCase = true) ||
-                transaction.sender.contains(q, ignoreCase = true)
+            val c = Calendar.getInstance().apply { timeInMillis = transaction.timestamp }
+            val matchesQuery = q.isBlank() || transaction.merchant.contains(q, true) || transaction.category.contains(q, true) ||
+                transaction.sender.contains(q, true) || bankDisplayName(transaction.sender).contains(q, true)
             val matchesType = typeFilter == null || transaction.type == typeFilter
             val matchesCategory = categoryFilter == null || transaction.category == categoryFilter
-            matchesQuery && matchesType && matchesCategory
+            val matchesBank = bankFilter == null || bankDisplayName(transaction.sender) == bankFilter
+            val matchesMonth = monthFilter == null || (c.get(Calendar.YEAR) == monthFilter!!.first && c.get(Calendar.MONTH) == monthFilter!!.second)
+            matchesQuery && matchesType && matchesCategory && matchesBank && matchesMonth
+        }.let { list ->
+            when (sortMode) {
+                "Oldest" -> list.sortedBy { it.timestamp }
+                "Highest amount" -> list.sortedByDescending { it.amount }
+                "Lowest amount" -> list.sortedBy { it.amount }
+                else -> list.sortedByDescending { it.timestamp }
+            }
         }
     }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
+
     Box(modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().padding(16.dp)) {
-            Text("Activity", style = MaterialTheme.typography.headlineMedium)
-            Text(filteredTransactions.size.toString() + " of " + transactions.size + " transactions", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
-            OutlinedTextField(
-                value = query,
-                onValueChange = { query = it },
-                modifier = Modifier.fillMaxWidth(),
-                label = { Text("Search merchant, category or account") },
-                singleLine = true,
-                trailingIcon = {
-                    if (query.isNotBlank()) TextButton(onClick = { query = "" }) { Text("Clear") }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Column {
+                    Text("Activity", style = MaterialTheme.typography.headlineMedium)
+                    Text(filteredTransactions.size.toString() + " of " + transactions.size + " transactions", style = MaterialTheme.typography.bodyMedium)
                 }
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                FilterChip(selected = typeFilter == null, onClick = { typeFilter = null }, label = { Text("All") })
-                FilterChip(selected = typeFilter == TransactionType.DEBIT, onClick = {
-                    typeFilter = if (typeFilter == TransactionType.DEBIT) null else TransactionType.DEBIT
-                }, label = { Text("Spent") })
-                FilterChip(selected = typeFilter == TransactionType.CREDIT, onClick = {
-                    typeFilter = if (typeFilter == TransactionType.CREDIT) null else TransactionType.CREDIT
-                }, label = { Text("Earned") })
                 Box {
-                    FilterChip(selected = categoryFilter != null, onClick = { categoryMenu = true },
-                        label = { Text(categoryFilter ?: "Category") })
-                    DropdownMenu(expanded = categoryMenu, onDismissRequest = { categoryMenu = false }) {
-                        DropdownMenuItem(text = { Text("All categories") }, onClick = {
-                            categoryFilter = null
-                            categoryMenu = false
-                        })
-                        categories.forEach { category ->
-                            DropdownMenuItem(text = { Text(category) }, onClick = {
-                                categoryFilter = category
-                                categoryMenu = false
-                            })
+                    TextButton(onClick = { sortMenu = true }) { Text(sortMode) }
+                    DropdownMenu(sortMenu, { sortMenu = false }) {
+                        listOf("Newest", "Oldest", "Highest amount", "Lowest amount").forEach { option ->
+                            DropdownMenuItem(text = { Text(option) }, onClick = { sortMode = option; sortMenu = false })
                         }
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(bottom = 90.dp)
-            ) {
-                val monthGroups = filteredTransactions
-                    .groupBy {
-                        Calendar.getInstance().apply { timeInMillis = it.timestamp }
-                            .let { cal -> cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH) }
+            OutlinedTextField(
+                value = query, onValueChange = { query = it }, modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search merchant, category or bank") }, singleLine = true,
+                trailingIcon = { if (query.isNotBlank()) TextButton(onClick = { query = "" }) { Text("Clear") } }
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(typeFilter == null, { typeFilter = null }, label = { Text("All") })
+                FilterChip(typeFilter == TransactionType.DEBIT, { typeFilter = if (typeFilter == TransactionType.DEBIT) null else TransactionType.DEBIT }, label = { Text("Spent") })
+                FilterChip(typeFilter == TransactionType.CREDIT, { typeFilter = if (typeFilter == TransactionType.CREDIT) null else TransactionType.CREDIT }, label = { Text("Earned") })
+                Box {
+                    FilterChip(categoryFilter != null, { categoryMenu = true }, label = { Text(categoryFilter ?: "Category") })
+                    DropdownMenu(categoryMenu, { categoryMenu = false }) {
+                        DropdownMenuItem(text = { Text("All categories") }, onClick = { categoryFilter = null; categoryMenu = false })
+                        categories.forEach { category -> DropdownMenuItem(text = { Text(category) }, onClick = { categoryFilter = category; categoryMenu = false }) }
                     }
-                    .toSortedMap(compareByDescending<Pair<Int, Int>> { it.first }.thenByDescending { it.second })
-
+                }
+                Box {
+                    FilterChip(bankFilter != null, { bankMenu = true }, label = { Text(bankFilter ?: "Bank") })
+                    DropdownMenu(bankMenu, { bankMenu = false }) {
+                        DropdownMenuItem(text = { Text("All banks") }, onClick = { bankFilter = null; bankMenu = false })
+                        bankOptions.forEach { bank -> DropdownMenuItem(text = { Text(bank) }, onClick = { bankFilter = bank; bankMenu = false }) }
+                    }
+                }
+                Box {
+                    val monthLabel = monthFilter?.let { SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(Calendar.getInstance().apply { set(it.first, it.second, 1) }.time) } ?: "Month"
+                    FilterChip(monthFilter != null, { monthMenu = true }, label = { Text(monthLabel) })
+                    DropdownMenu(monthMenu, { monthMenu = false }) {
+                        DropdownMenuItem(text = { Text("All months") }, onClick = { monthFilter = null; monthMenu = false })
+                        monthOptions.forEach { (year, month) ->
+                            DropdownMenuItem(
+                                text = { Text(SimpleDateFormat("MMM yyyy", Locale.getDefault()).format(Calendar.getInstance().apply { set(year, month, 1) }.time)) },
+                                onClick = { monthFilter = year to month; monthMenu = false }
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            LazyColumn(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(bottom = 90.dp)) {
+                val monthGroups = filteredTransactions.groupBy {
+                    Calendar.getInstance().apply { timeInMillis = it.timestamp }.let { cal -> cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH) }
+                }.toSortedMap(compareByDescending<Pair<Int, Int>> { it.first }.thenByDescending { it.second })
                 if (filteredTransactions.isEmpty()) {
                     item { Text("No transactions match your filters.", Modifier.fillMaxWidth().padding(vertical = 28.dp), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
-
                 monthGroups.forEach { (yearMonth, monthTransactions) ->
                     val (year, month) = yearMonth
-                    item(key = "month-$year-$month") {
-                        Text(
-                            SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(
-                                Calendar.getInstance().apply { set(year, month, 1) }.time
-                            ),
-                            style = MaterialTheme.typography.titleLarge,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
-                        )
+                    item(key = "month-" + year + "-" + month) {
+                        Text(SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Calendar.getInstance().apply { set(year, month, 1) }.time), style = MaterialTheme.typography.titleLarge, modifier = Modifier.padding(top = 8.dp, bottom = 2.dp))
                     }
                     items(monthTransactions, key = { it.id }) { transaction ->
                         TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
@@ -615,7 +635,7 @@ private fun CategoryPieChart(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Box(Modifier.size(10.dp).background(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = (1f - index * 0.12f).coerceAtLeast(0.35f)),
+                                    categoryColors[index % categoryColors.size],
                                     MaterialTheme.shapes.small
                                 ))
                                 Spacer(Modifier.width(8.dp))
@@ -762,65 +782,92 @@ private fun HomePage(
     var displayedMonth by remember { mutableStateOf(Calendar.getInstance().get(Calendar.MONTH)) }
     var displayedYear by remember { mutableStateOf(Calendar.getInstance().get(Calendar.YEAR)) }
     var selectedDay by remember { mutableStateOf<Int?>(null) }
+    var showBudgetDialog by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("spendsense_budget", android.content.Context.MODE_PRIVATE) }
     val currency = NumberFormat.getCurrencyInstance(Locale("en", "IN"))
     val monthTransactions = remember(transactions, displayedMonth, displayedYear) { transactions.filterByMonth(displayedYear, displayedMonth) }
     val monthIncome = monthTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
     val monthExpenses = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category != "Transfers" }.sumOf { it.amount }
     val monthInvested = monthTransactions.filter { it.type == TransactionType.DEBIT && it.category == "Investments" }.sumOf { it.amount }
+    val monthSpent = monthExpenses - monthInvested
+    val budgetKey = "overall_" + displayedYear + "_" + displayedMonth
+    val monthlyBudget = prefs.getFloat(budgetKey, 0f).toDouble()
+    val budgetProgress = if (monthlyBudget > 0) (monthSpent / monthlyBudget).coerceIn(0.0, 1.0) else 0.0
     val selectedTransactions = selectedDay?.let { day ->
         monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
     } ?: emptyList()
-    Column(
-        modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-            .verticalScroll(rememberScrollState())
-    ) {
+
+    Column(modifier.fillMaxSize().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp).verticalScroll(rememberScrollState())) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column { Text("SpendSense", style = MaterialTheme.typography.headlineMedium); Text("Your money at a glance", style = MaterialTheme.typography.bodyMedium) }
             TextButton(onClick = onScan) { Text("Scan SMS") }
         }
         Spacer(Modifier.height(14.dp))
         MonthHeader(displayedYear, displayedMonth, {
-            if (displayedMonth == Calendar.JANUARY) { displayedMonth = Calendar.DECEMBER; displayedYear-- } else displayedMonth--; selectedDay = null
+            if (displayedMonth == Calendar.JANUARY) { displayedMonth = Calendar.DECEMBER; displayedYear-- } else displayedMonth--
+            selectedDay = null
         }, {
-            if (displayedMonth == Calendar.DECEMBER) { displayedMonth = Calendar.JANUARY; displayedYear++ } else displayedMonth++; selectedDay = null
+            if (displayedMonth == Calendar.DECEMBER) { displayedMonth = Calendar.JANUARY; displayedYear++ } else displayedMonth++
+            selectedDay = null
         })
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MetricCard("Earned", currency.format(monthIncome), Modifier.weight(1f))
-            MetricCard("Spent", currency.format(monthExpenses - monthInvested), Modifier.weight(1f))
+            MetricCard("Spent", currency.format(monthSpent), Modifier.weight(1f))
             MetricCard("Invested", currency.format(monthInvested), Modifier.weight(1f))
         }
         Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("Net cash flow", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(currency.format(monthIncome - monthExpenses), style = MaterialTheme.typography.titleMedium)
+        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                Text("Net cash flow", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(currency.format(monthIncome - monthExpenses), style = MaterialTheme.typography.titleMedium)
+            }
+            Text(monthTransactions.size.toString() + " transactions", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Spacer(Modifier.height(12.dp))
         CalendarView(displayedYear, displayedMonth, monthTransactions, selectedDay) { selectedDay = it }
+
+        Spacer(Modifier.height(14.dp))
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(14.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("Monthly spending budget", style = MaterialTheme.typography.titleMedium)
+                        Text(
+                            if (monthlyBudget > 0) currency.format(monthSpent) + " of " + currency.format(monthlyBudget) else "Set a budget to track your spending",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = { showBudgetDialog = true }) { Text(if (monthlyBudget > 0) "Edit" else "Set") }
+                }
+                if (monthlyBudget > 0) {
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(progress = { budgetProgress.toFloat() }, modifier = Modifier.fillMaxWidth())
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (monthSpent > monthlyBudget) "Over budget by " + currency.format(monthSpent - monthlyBudget) else currency.format(monthlyBudget - monthSpent) + " remaining",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (monthSpent > monthlyBudget) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+
         val recurring = findRecurringCandidates(transactions)
         if (recurring.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     Text("Potential recurring payments", style = MaterialTheme.typography.titleMedium)
-                    Text("Based on repeated merchant and monthly timing", style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("Based on repeated merchant and monthly timing", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(8.dp))
                     recurring.take(3).forEach { item ->
-                        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween) {
+                        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                             Column(Modifier.weight(1f)) {
                                 Text(item.merchant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(item.category + " • " + item.count + " payments",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text(item.category + " • " + item.count + " payments", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Text(currency.format(item.averageAmount), style = MaterialTheme.typography.labelMedium)
                         }
@@ -828,6 +875,7 @@ private fun HomePage(
                 }
             }
         }
+
         selectedDay?.let { day ->
             Spacer(Modifier.height(14.dp))
             Text("Transactions on " + dayLabel(displayedYear, displayedMonth, day), style = MaterialTheme.typography.titleLarge)
@@ -838,6 +886,13 @@ private fun HomePage(
                     TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
                 }
             }
+        }
+    }
+
+    if (showBudgetDialog) {
+        BudgetDialog(monthlyBudget, { showBudgetDialog = false }) { amount ->
+            prefs.edit().putFloat(budgetKey, amount.toFloat()).apply()
+            showBudgetDialog = false
         }
     }
 }
@@ -1076,6 +1131,26 @@ private fun bankDisplayName(sender: String): String {
 }
 
 @Composable
+private fun TransactionDetailDialog(transaction: Transaction, currency: NumberFormat, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(transaction.merchant) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text((if (transaction.type == TransactionType.CREDIT) "+ " else "− ") + currency.format(transaction.amount), style = MaterialTheme.typography.headlineSmall)
+                Text("Category: " + transaction.category)
+                Text("Account: " + bankDisplayName(transaction.sender))
+                Text("Date: " + SimpleDateFormat("dd MMM yyyy · h:mm a", Locale.getDefault()).format(Date(transaction.timestamp)))
+                transaction.transactionRef?.let { Text("Reference: " + it) }
+                Text("Confidence: " + transaction.confidence + "%")
+                Text("Source: " + if (transaction.rawMessage == "Manual transaction") "Manual" else "SMS")
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+@Composable
 private fun EditTransactionDialog(
     transaction: Transaction,
     onDismiss: () -> Unit,
@@ -1185,6 +1260,18 @@ private fun BankDialog(
 
 
 @Composable
+private fun BudgetDialog(current: Double, onDismiss: () -> Unit, onSave: (Double) -> Unit) {
+    var amount by remember { mutableStateOf(if (current > 0) current.toString() else "") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Monthly spending budget") },
+        text = { OutlinedTextField(value = amount, onValueChange = { amount = it }, label = { Text("Budget amount") }, prefix = { Text("₹") }, singleLine = true) },
+        confirmButton = { TextButton(onClick = { amount.toDoubleOrNull()?.takeIf { it > 0 }?.let(onSave) }) { Text("Save") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
 private fun MetricCard(title: String, value: String, modifier: Modifier) {
     Card(modifier) {
         Column(Modifier.padding(horizontal = 12.dp, vertical = 11.dp)) {
@@ -1213,11 +1300,13 @@ private fun TransactionRow(
     var bankDialog by remember { mutableStateOf(false) }
     var deleteDialog by remember { mutableStateOf(false) }
     var editDialog by remember { mutableStateOf(false) }
+    var detailsDialog by remember { mutableStateOf(false) }
     var selectedCategory by remember(transaction.category) { mutableStateOf(transaction.category) }
     var newCategory by remember { mutableStateOf("") }
 
     Card(
-        Modifier.fillMaxWidth(),
+        onClick = { detailsDialog = true },
+        modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Row(
@@ -1317,6 +1406,10 @@ private fun TransactionRow(
                 }
             }
         }
+    }
+
+    if (detailsDialog) {
+        TransactionDetailDialog(transaction, currency, onDismiss = { detailsDialog = false })
     }
 
     if (editDialog) {
