@@ -1473,9 +1473,9 @@ private fun HomePage(
         })
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            MetricCard("Earned", currency.format(monthIncome), Modifier.weight(1f))
-            MetricCard("Spent", currency.format(monthSpent), Modifier.weight(1f))
-            MetricCard("Invested", currency.format(monthInvested), Modifier.weight(1f))
+            MetricCard("Earned", currency.format(monthIncome), Modifier.weight(1f), Color(0xFF1B5E20), "↑")
+            MetricCard("Spent", currency.format(monthSpent), Modifier.weight(1f), Color(0xFFB71C1C), "↓")
+            MetricCard("Invested", currency.format(monthInvested), Modifier.weight(1f), Color(0xFF6A1B9A), "↗")
         }
         Spacer(Modifier.height(8.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -1520,9 +1520,17 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
     val leading = (firstDay - Calendar.MONDAY + 7) % 7
     val cells = ((leading + daysInMonth + 6) / 7) * 7
     val byDay = transactions.groupBy { Calendar.getInstance().apply { timeInMillis = it.timestamp }.get(Calendar.DAY_OF_MONTH) }
-    Card(Modifier.fillMaxWidth()) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFF151F32))
+    ) {
         Column(Modifier.padding(10.dp)) {
-            Row(Modifier.fillMaxWidth()) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .background(Color(0xFF202D46), MaterialTheme.shapes.medium)
+                    .padding(vertical = 8.dp)
+            ) {
                 listOf("M","T","W","T","F","S","S").forEach {
                     Text(it, Modifier.weight(1f), textAlign = TextAlign.Center, style = MaterialTheme.typography.labelMedium)
                 }
@@ -1946,12 +1954,36 @@ private fun BudgetDialog(
 
 
 @Composable
-private fun MetricCard(title: String, value: String, modifier: Modifier) {
-    Card(modifier) {
-        Column(Modifier.padding(horizontal = 12.dp, vertical = 11.dp)) {
-            Text(title, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun MetricCard(
+    title: String,
+    value: String,
+    modifier: Modifier,
+    accent: Color,
+    icon: String
+) {
+    Card(
+        modifier,
+        colors = CardDefaults.cardColors(containerColor = accent.copy(alpha = 0.16f))
+    ) {
+        Column(Modifier.padding(horizontal = 11.dp, vertical = 10.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = accent
+                )
+                Text(icon, color = accent, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            }
             Spacer(Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleSmall)
+            Text(
+                value,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
