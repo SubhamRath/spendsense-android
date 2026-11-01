@@ -1,6 +1,7 @@
 package com.spendsense.app
 
 import android.Manifest
+import android.app.DatePickerDialog
 import android.content.pm.PackageManager
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -79,9 +80,9 @@ class MainActivity : ComponentActivity() {
                         onAddCategory = { name ->
                             lifecycleScope.launch { repository.addCustomCategory(name) }
                         },
-                        onAddTransaction = { amount, type, merchant, category, bank ->
+                        onAddTransaction = { amount, type, merchant, category, bank, timestamp ->
                             lifecycleScope.launch {
-                                repository.addManualTransaction(amount, type, merchant, category, bank, System.currentTimeMillis())
+                                repository.addManualTransaction(amount, type, merchant, category, bank, timestamp)
                             }
                         }
                     )
@@ -122,7 +123,7 @@ private fun SpendSenseApp(
     onChangeBank: (Transaction, String) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onAddCategory: (String) -> Unit,
-    onAddTransaction: (Double, TransactionType, String, String, String) -> Unit
+    onAddTransaction: (Double, TransactionType, String, String, String, Long) -> Unit
 ) {
     var page by remember { mutableStateOf(0) }
     Scaffold(
@@ -167,7 +168,7 @@ private fun ActivityPage(
     onChangeBank: (Transaction, String) -> Unit,
     onDeleteTransaction: (Transaction) -> Unit,
     onAddCategory: (String) -> Unit,
-    onAddTransaction: (Double, TransactionType, String, String, String) -> Unit,
+    onAddTransaction: (Double, TransactionType, String, String, String, Long) -> Unit,
     modifier: Modifier
 ) {
     var showAdd by remember { mutableStateOf(false) }
@@ -182,8 +183,27 @@ private fun ActivityPage(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(bottom = 90.dp)
             ) {
-                items(transactions, key = { it.id }) { transaction ->
-                    TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory)
+                val monthGroups = transactions
+                    .groupBy {
+                        Calendar.getInstance().apply { timeInMillis = it.timestamp }
+                            .let { cal -> cal.get(Calendar.YEAR) to cal.get(Calendar.MONTH) }
+                    }
+                    .toSortedMap(compareByDescending<Pair<Int, Int>> { it.first }.thenByDescending { it.second })
+
+                monthGroups.forEach { (yearMonth, monthTransactions) ->
+                    val (year, month) = yearMonth
+                    item(key = "month-$year-$month") {
+                        Text(
+                            SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(
+                                Calendar.getInstance().apply { set(year, month, 1) }.time
+                            ),
+                            style = MaterialTheme.typography.titleLarge,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 2.dp)
+                        )
+                    }
+                    items(monthTransactions, key = { it.id }) { transaction ->
+                        TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onAddCategory)
+                    }
                 }
             }
         }
@@ -201,7 +221,7 @@ private fun ActivityPage(
 private fun AddTransactionDialog(
     categories: List<String>,
     onDismiss: () -> Unit,
-    onAdd: (Double, TransactionType, String, String, String) -> Unit
+    onAdd: (Double, TransactionType, String, String, String, Long) -> Unit
 ) {
     var amount by remember { mutableStateOf("") }
     var merchant by remember { mutableStateOf("") }
@@ -209,6 +229,7 @@ private fun AddTransactionDialog(
     var type by remember { mutableStateOf(TransactionType.DEBIT) }
     var category by remember { mutableStateOf(categories.firstOrNull() ?: "Other") }
     var categoryMenu by remember { mutableStateOf(false) }
+    var selectedDate by remember { mutableStateOf(Calendar.getInstance()) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add transaction") },
@@ -221,6 +242,24 @@ private fun AddTransactionDialog(
                 OutlinedTextField(amount, { amount = it }, label = { Text("Amount") }, singleLine = true)
                 OutlinedTextField(merchant, { merchant = it }, label = { Text("Merchant / description") }, singleLine = true)
                 OutlinedTextField(bank, { bank = it }, label = { Text("Bank / Cash") }, singleLine = true)
+                val dateFormat = SimpleDateFormat("dd MMM yyyy", Locale.getDefault())
+                OutlinedButton(
+                    onClick = {
+                        val current = selectedDate
+                        DatePickerDialog(
+                            LocalContext.current,
+                            { _, year, month, day ->
+                                selectedDate = Calendar.getInstance().apply { set(year, month, day, 12, 0, 0) }
+                            },
+                            current.get(Calendar.YEAR),
+                            current.get(Calendar.MONTH),
+                            current.get(Calendar.DAY_OF_MONTH)
+                        ).show()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Date: " + dateFormat.format(selectedDate.time))
+                }
                 Box {
                     OutlinedButton(onClick = { categoryMenu = true }) { Text("Category: " + category) }
                     DropdownMenu(categoryMenu, { categoryMenu = false }) {
@@ -233,7 +272,7 @@ private fun AddTransactionDialog(
         },
         confirmButton = {
             TextButton(onClick = {
-                amount.toDoubleOrNull()?.takeIf { it > 0 }?.let { onAdd(it, type, merchant, category, bank) }
+                amount.toDoubleOrNull()?.takeIf { it > 0 }?.let { onAdd(it, type, merchant, category, bank, selectedDate.timeInMillis) }
             }) { Text("Add") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
