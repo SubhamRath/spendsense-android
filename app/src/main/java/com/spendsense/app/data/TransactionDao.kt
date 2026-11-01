@@ -22,4 +22,7 @@ interface TransactionDao {
 
     @Query("UPDATE transactions SET sender = :bank WHERE smsId = :smsId")
     suspend fun updateBank(smsId: Long, bank: String)
+
+    @Query("DELETE FROM transactions WHERE smsId = :smsId")
+    suspend fun deleteTransaction(smsId: Long)
 }
