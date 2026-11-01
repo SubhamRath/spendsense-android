@@ -215,7 +215,7 @@ private fun ActivityPage(
                 }
             )
             Spacer(Modifier.height(8.dp))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 FilterChip(selected = typeFilter == null, onClick = { typeFilter = null }, label = { Text("All") })
                 FilterChip(selected = typeFilter == TransactionType.DEBIT, onClick = {
                     typeFilter = if (typeFilter == TransactionType.DEBIT) null else TransactionType.DEBIT
