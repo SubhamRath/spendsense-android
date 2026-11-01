@@ -232,6 +232,11 @@ object TransactionParser {
             listOf("electricity", "water bill", "broadband", "airtel", "jio", "vi ", "recharge", "dth").any { it in text } -> "Bills"
             listOf("sip", "mutual fund", "groww", "zerodha", "coin", "investment", "nps", "indmoney", "brokerage", "broking").any { it in text } -> "Investments"
             listOf("atm", "cash withdrawal", "cash withdrawn").any { it in text } -> "Cash withdrawal"
+            listOf(
+                "self transfer", "own account", "account transfer", "a/c transfer",
+                "fund transfer", "bank transfer", "transfer to", "transferred to",
+                "imps to", "neft to", "rtgs to", "upi transfer"
+            ).any { it in text } -> "Transfers"
             listOf("transfer", "credited", "rrn").any { it in text } && merchant != "Unknown" -> "Transfers"
             else -> "Other"
         }
