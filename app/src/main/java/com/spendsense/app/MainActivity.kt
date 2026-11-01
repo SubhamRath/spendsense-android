@@ -151,13 +151,7 @@ private fun SpendSenseApp(
                     page == 1,
                     { page = 1 },
                     icon = {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy((-3).dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text("↑", fontSize = 18.sp)
-                            Text("↓", fontSize = 18.sp)
-                        }
+                        Text("⇄", fontSize = 24.sp)
                     },
                     label = { Text("Activity") }
                 )
