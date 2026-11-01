@@ -352,8 +352,7 @@ private fun SpendingBarChart(
     spending: List<Transaction>
 ) {
     val barColor = MaterialTheme.colorScheme.primary
-    val gridColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.18f)
-    val maxValue = maxOf(1.0, values.maxOrNull() ?: 1.0)
+        val maxValue = maxOf(1.0, values.maxOrNull() ?: 1.0)
     val chartMax = when {
         maxValue <= 1000.0 -> 1000.0
         maxValue <= 5000.0 -> 5000.0
@@ -413,7 +412,7 @@ private fun SpendingBarChart(
                     Column(
                         Modifier
                             .fillMaxHeight()
-                            .then(if (days.size <= 7) Modifier.fillMaxWidth(1f / days.size) else Modifier.width(44.dp))
+                            .then(if (days.size <= 7) Modifier.weight(1f) else Modifier.width(44.dp))
                             .clickable { selectedDay = i },
                         verticalArrangement = Arrangement.Bottom,
                         horizontalAlignment = Alignment.CenterHorizontally
