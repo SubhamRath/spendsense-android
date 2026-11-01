@@ -2032,12 +2032,48 @@ private fun List<Transaction>.filterByMonth(year: Int, month: Int): List<Transac
 
 @Composable
 private fun SpendSenseTheme(content: @Composable () -> Unit) {
+    // Premium dark-finance palette: deep navy surfaces with restrained champagne/gold accents.
+    val premiumDark = darkColorScheme(
+        primary = Color(0xFFD8B36A),
+        onPrimary = Color(0xFF17130B),
+        primaryContainer = Color(0xFF3A2F19),
+        onPrimaryContainer = Color(0xFFFFE8B5),
+        secondary = Color(0xFF8FA9C7),
+        onSecondary = Color(0xFF101820),
+        secondaryContainer = Color(0xFF243447),
+        onSecondaryContainer = Color(0xFFD9E8FA),
+        tertiary = Color(0xFF5FC7B7),
+        onTertiary = Color(0xFF06201C),
+        tertiaryContainer = Color(0xFF123D37),
+        onTertiaryContainer = Color(0xFFB5F1E7),
+        error = Color(0xFFFF7B72),
+        onError = Color(0xFF2B0907),
+        errorContainer = Color(0xFF4D1A17),
+        onErrorContainer = Color(0xFFFFDAD6),
+        background = Color(0xFF080D14),
+        onBackground = Color(0xFFF1F3F5),
+        surface = Color(0xFF101722),
+        onSurface = Color(0xFFE8ECF1),
+        surfaceVariant = Color(0xFF192331),
+        onSurfaceVariant = Color(0xFFAAB5C2),
+        outline = Color(0xFF394758),
+        outlineVariant = Color(0xFF253140),
+        inverseSurface = Color(0xFFE8ECF1),
+        inverseOnSurface = Color(0xFF101722),
+        inversePrimary = Color(0xFF755B24)
+    )
     MaterialTheme(
-        colorScheme = darkColorScheme(
-            primary = Color(0xFF8AB4F8),
-            background = Color(0xFF0B0F14),
-            surface = Color(0xFF151A21),
-            surfaceVariant = Color(0xFF20262E)
+        colorScheme = premiumDark,
+        shapes = Shapes(
+            small = RoundedCornerShape(10.dp),
+            medium = RoundedCornerShape(16.dp),
+            large = RoundedCornerShape(22.dp)
+        ),
+        typography = Typography(
+            headlineMedium = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.SemiBold),
+            titleLarge = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.SemiBold),
+            titleMedium = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            bodyMedium = MaterialTheme.typography.bodyMedium.copy(lineHeight = 20.sp)
         ),
         content = content
     )
