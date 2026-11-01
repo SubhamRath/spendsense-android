@@ -24,6 +24,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
@@ -1771,11 +1772,15 @@ private fun HomePage(
         monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
     } ?: emptyList()
     val homeScrollState = rememberScrollState()
+    var spendingSectionY by remember { mutableStateOf<Float?>(null) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
 
-    LaunchedEffect(selectedDay, selectedTransactions.size) {
-        if (selectedDay != null) {
+    LaunchedEffect(selectedDay, selectedTransactions.size, spendingSectionY) {
+        if (selectedDay != null && selectedTransactions.isNotEmpty() && spendingSectionY != null) {
             delay(100)
-            homeScrollState.animateScrollTo(homeScrollState.maxValue)
+            val target = (homeScrollState.value + spendingSectionY!! - with(density) { 8.dp.toPx() })
+                .coerceIn(0f, homeScrollState.maxValue.toFloat())
+            homeScrollState.animateScrollTo(target.toInt())
         }
     }
 
@@ -1829,7 +1834,12 @@ private fun HomePage(
 
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     if (spent.isNotEmpty()) {
-                        TransactionSectionHeader("💸 Spent", spent.size, Color(0xFFFF7043))
+                        TransactionSectionHeader(
+                            "💸 Spent",
+                            spent.size,
+                            Color(0xFFFF7043),
+                            Modifier.onGloballyPositioned { spendingSectionY = it.positionInParent().y }
+                        )
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             spent.forEach { transaction ->
                                 TransactionRow(transaction, currency, categories, onChangeCategory, onChangeBank, onDeleteTransaction, onEditTransaction, onAddCategory)
@@ -1862,9 +1872,9 @@ private fun HomePage(
 }
 
 @Composable
-private fun TransactionSectionHeader(title: String, count: Int, accent: Color) {
+private fun TransactionSectionHeader(title: String, count: Int, accent: Color, modifier: Modifier = Modifier) {
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .background(accent.copy(alpha = 0.12f), MaterialTheme.shapes.medium)
             .padding(horizontal = 12.dp, vertical = 8.dp),
