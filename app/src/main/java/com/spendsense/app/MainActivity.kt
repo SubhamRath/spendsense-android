@@ -397,7 +397,7 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                 Row(Modifier.fillMaxWidth()) {
                     for (col in 0..6) {
                         val day = row * 7 + col - leading + 1
-                        if (day < 1 || day > daysInMonth) Spacer(Modifier.weight(1f).height(64.dp))
+                        if (day < 1 || day > daysInMonth) Spacer(Modifier.weight(1f).height(48.dp))
                         else {
                             val dayTransactions = byDay[day].orEmpty()
                             val income = dayTransactions.filter { it.type == TransactionType.CREDIT }.sumOf { it.amount }
@@ -418,7 +418,7 @@ private fun CalendarView(year: Int, month: Int, transactions: List<Transaction>,
                                 colors = CardDefaults.cardColors(containerColor = cellColor)
                             ) {
                                 Column(
-                                    Modifier.fillMaxWidth().height(58.dp).padding(4.dp),
+                                    Modifier.fillMaxWidth().height(44.dp).padding(4.dp),
                                     verticalArrangement = Arrangement.spacedBy(1.dp)
                                 ) {
                                     Text(day.toString(), style = MaterialTheme.typography.labelLarge)
