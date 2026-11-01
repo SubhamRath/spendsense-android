@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import java.util.Calendar
 import java.util.Date
 import androidx.core.content.ContextCompat
