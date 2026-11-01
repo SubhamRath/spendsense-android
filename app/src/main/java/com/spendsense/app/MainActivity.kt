@@ -15,6 +15,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
@@ -122,10 +123,27 @@ private fun SpendSenseApp(
     var page by remember { mutableStateOf(0) }
     Scaffold(
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(page == 0, { page = 0 }, icon = { Text("⌂") }, label = { Text("Home") })
-                NavigationBarItem(page == 1, { page = 1 }, icon = { Text("↕") }, label = { Text("Activity") })
-                NavigationBarItem(page == 2, { page = 2 }, icon = { Text("▥") }, label = { Text("Graphs") })
+            NavigationBar(
+                modifier = Modifier.height(88.dp)
+            ) {
+                NavigationBarItem(
+                    page == 0,
+                    { page = 0 },
+                    icon = { Text("⌂", fontSize = 26.sp) },
+                    label = { Text("Home") }
+                )
+                NavigationBarItem(
+                    page == 1,
+                    { page = 1 },
+                    icon = { Text("↕", fontSize = 26.sp) },
+                    label = { Text("Activity") }
+                )
+                NavigationBarItem(
+                    page == 2,
+                    { page = 2 },
+                    icon = { Text("▥", fontSize = 26.sp) },
+                    label = { Text("Graphs") }
+                )
             }
         }
     ) { padding ->
