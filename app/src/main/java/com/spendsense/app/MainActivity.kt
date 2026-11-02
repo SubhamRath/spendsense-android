@@ -24,13 +24,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import java.util.Calendar
 import java.util.Date
 import androidx.core.content.ContextCompat
@@ -1774,15 +1775,12 @@ private fun HomePage(
         monthTransactions.filter { transaction -> Calendar.getInstance().apply { timeInMillis = transaction.timestamp }.get(Calendar.DAY_OF_MONTH) == day }
     } ?: emptyList()
     val homeScrollState = rememberScrollState()
-    var spendingSectionY by remember { mutableStateOf<Float?>(null) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
+    val spendingSectionRequester = remember { BringIntoViewRequester() }
 
-    LaunchedEffect(selectedDay, selectedTransactions.size, spendingSectionY) {
-        if (selectedDay != null && selectedTransactions.isNotEmpty() && spendingSectionY != null) {
+    LaunchedEffect(selectedDay, selectedTransactions.size) {
+        if (selectedDay != null && selectedTransactions.isNotEmpty()) {
             delay(100)
-            val target = (homeScrollState.value + spendingSectionY!! - with(density) { 8.dp.toPx() })
-                .coerceIn(0f, homeScrollState.maxValue.toFloat())
-            homeScrollState.animateScrollTo(target.toInt())
+            spendingSectionRequester.bringIntoView()
         }
     }
 
@@ -1840,7 +1838,7 @@ private fun HomePage(
                             "💸 Spent",
                             spent.size,
                             Color(0xFFFF7043),
-                            Modifier.onGloballyPositioned { spendingSectionY = it.positionInRoot().y }
+                            Modifier.bringIntoViewRequester(spendingSectionRequester)
                         )
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             spent.forEach { transaction ->
